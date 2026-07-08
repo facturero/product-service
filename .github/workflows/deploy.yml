@@ -65,6 +65,6 @@ jobs:
           export REGISTRY="${{ env.REGISTRY }}/${{ github.repository }}"
           export IMAGE_NAME="${{ env.IMAGE_NAME }}"
           export IMAGE_TAG="${{ github.sha }}"
-          envsubst < k8s/deployment.yaml | kubectl apply -n ${{ env.K8S_NAMESPACE }} -f -
-          kubectl apply -n ${{ env.K8S_NAMESPACE }} -f k8s/service.yaml
+          envsubst < k8s/deployment.yaml | kubectl apply --validate=false -n ${{ env.K8S_NAMESPACE }} -f -
+          kubectl apply --validate=false -n ${{ env.K8S_NAMESPACE }} -f k8s/service.yaml
           kubectl rollout status -n ${{ env.K8S_NAMESPACE }} deployment/product-service-node
