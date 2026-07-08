@@ -1,0 +1,73 @@
+name: Deploy product-service
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/product-service/**'
+      - '.github/workflows/deploy-product-service.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: product-service
+  K8S_NAMESPACE: crm
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: backend/product-service
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Deploy to Kubernetes
+        run: |
+          export REGISTRY="${{ env.REGISTRY }}/${{ github.repository }}"
+          export IMAGE_NAME="${{ env.IMAGE_NAME }}"
+          export IMAGE_TAG="${{ github.sha }}"
+          envsubst < backend/product-service/k8s/deployment.yaml | kubectl apply -n ${{ env.K8S_NAMESPACE }} -f -
+          kubectl apply -n ${{ env.K8S_NAMESPACE }} -f backend/product-service/k8s/service.yaml
+          kubectl rollout status -n ${{ env.K8S_NAMESPACE }} deployment/product-service-node
