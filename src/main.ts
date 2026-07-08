@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server';
 import { config } from './infrastructure/config.js';
 import { sequelize } from './infrastructure/persistence/sequelize.js';
-import './infrastructure/persistence/models';
+import './infrastructure/persistence/models.js';
 import { buildRepositories, SequelizeUnitOfWork } from './infrastructure/persistence/repositories.js';
 import { startConsumers } from './infrastructure/messaging/consumer.js';
 import { CreateProductUseCase } from './application/use-cases/create-product.js';
