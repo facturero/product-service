@@ -1,0 +1,726 @@
+openapi: 3.0.3
+
+info:
+  title: product-service API
+  version: 2.0.0
+  description: >
+    Catálogo de productos y servicios del CRM. Aislamiento por `organization_id`.
+
+
+    Precios en centavos internamente (Dinero.js); la API recibe/devuelve en la
+    unidad principal como string (`price: "19.99"`) más el entero (`priceCents: 1999`).
+
+
+    Impuestos: relación M:N (`product_taxes`) — un producto puede tener IVA + retención
+    simultaneamente. `PUT /products/:id/taxes` reemplaza el set completo.
+
+
+    Imágenes por referencia al files-service (crm-minio): el front sube vía /files/*
+    (presigned, category `product-image`) y registra aquí solo el `fileId`. La respuesta
+    expone `imageFileId` (principal, o null) e `images[].fileId`; el front arma la URL
+    con el files-service, igual que los avatares. product NO toca MinIO ni binarios.
+
+
+    No verifica JWT: confía en las cabeceras del gateway (`X-Organization-Id`,
+    `X-User-Id`, `X-Country-Code`, `X-Permissions`). Todas las rutas (salvo /health)
+    exigen `X-Organization-Id`. Recurso de otra organización → 404.
+
+servers:
+  - url: http://localhost:3006
+    description: Desarrollo local (detrás del api-gateway en producción)
+
+tags:
+  - name: health
+  - name: products
+  - name: images
+  - name: categories
+  - name: units
+  - name: catalog
+
+paths:
+
+  /health:
+    get:
+      tags: [health]
+      summary: Healthcheck
+      responses:
+        '200':
+          description: Operativo
+          content:
+            application/json:
+              schema: { type: object, properties: { status: { type: string, example: ok } } }
+
+  # ---------------------------------------------------------------------------
+  # Productos
+  # ---------------------------------------------------------------------------
+  /products:
+    get:
+      tags: [products]
+      summary: Listar productos
+      x-required-permission: product:read
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { name: search, in: query, schema: { type: string }, description: Busca por nombre o SKU }
+        - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { name: type, in: query, schema: { type: string, enum: [good, service] } }
+        - { name: categoryId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Productos (incluye imageFileId de la principal)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProductSummary' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+    post:
+      tags: [products]
+      summary: Crear producto
+      description: >
+        `price` se recibe como string decimal ("19.99") y se almacena en centavos con
+        Dinero.js. `taxRateIds` asigna el set inicial de impuestos; el `kind` de cada
+        tasa se copia del read-model de tax-service. `priceIncludesTax` indica si el
+        precio ya incluye IVA (billing lo usa para calcular base e impuesto correctamente).
+      x-required-permission: product:create
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProductRequest' }
+            examples:
+              bien:
+                value:
+                  name: Laptop Dell XPS 13
+                  type: good
+                  price: "1299.99"
+                  currencyCode: USD
+                  sku: DELL-XPS-13
+                  taxRateIds: ["3f1a2b…"]
+                  priceIncludesTax: false
+                  description: Procesador i7, 16GB RAM, 512GB SSD
+              servicio:
+                value:
+                  name: Consultoría contable mensual
+                  type: service
+                  price: "350.00"
+                  currencyCode: USD
+                  taxRateIds: ["3f1a2b…"]
+      responses:
+        '201':
+          description: Producto creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: SKU ya existe en la organización
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: SKU_EXISTS, message: Ya existe un producto con ese SKU. }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /products/{id}:
+    get:
+      tags: [products]
+      summary: Obtener producto (detalle completo con impuestos e imágenes)
+      x-required-permission: product:read
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { $ref: '#/components/parameters/ProductId' }
+      responses:
+        '200':
+          description: Producto completo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [products]
+      summary: Actualizar datos del producto
+      description: >
+        No gestiona impuestos (usar PUT /products/:id/taxes). Si se cambia `price`,
+        se reconvierte a centavos con Dinero.js. Emite `product.product.updated`.
+      x-required-permission: product:update
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { $ref: '#/components/parameters/ProductId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProductRequest' }
+      responses:
+        '200':
+          description: Producto actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: SKU ya existe
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /products/{id}/taxes:
+    put:
+      tags: [products]
+      summary: Reemplazar el set de impuestos del producto
+      description: >
+        Elimina todos los impuestos actuales y asigna el nuevo set. El `kind` de cada
+        tasa se copia del read-model de tax-service. Emite `product.product.updated`.
+      x-required-permission: product:update
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { $ref: '#/components/parameters/ProductId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTaxesRequest' }
+            examples:
+              iva-mas-retencion:
+                value:
+                  taxRateIds: ["uuid-iva15", "uuid-ret-iva"]
+      responses:
+        '200':
+          description: Impuestos actualizados
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: Alguna tasa no existe o no pertenece al país del contexto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /products/{id}/disable:
+    post:
+      tags: [products]
+      summary: Desactivar producto
+      description: Baja lógica. Emite `product.product.disabled` (billing bloquea nuevas líneas).
+      x-required-permission: product:update
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { $ref: '#/components/parameters/ProductId' }
+      responses:
+        '204': { description: Producto desactivado }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------------
+  # Imágenes
+  # ---------------------------------------------------------------------------
+  /products/{id}/images:
+    get:
+      tags: [images]
+      summary: Listar imágenes del producto
+      x-required-permission: product:read
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { $ref: '#/components/parameters/ProductId' }
+      responses:
+        '200':
+          description: Imágenes ordenadas por position
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProductImage' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    post:
+      tags: [images]
+      summary: Añadir imagen al producto
+      description: >
+        La primera imagen registrada se convierte automáticamente en principal. Si se
+        envía `isPrimary: true`, desplaza a la actual. NO sube binarios: el front ya
+        subió el archivo al files-service (presigned) y aquí registra el `fileId`.
+        Emite `product.product.updated`.
+      x-required-permission: product:update
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { $ref: '#/components/parameters/ProductId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddImageRequest' }
+            examples:
+              registrar:
+                value:
+                  fileId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                  alt: Laptop Dell XPS 13 vista frontal
+                  isPrimary: true
+      responses:
+        '201':
+          description: Imagen añadida
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductImage' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /products/{id}/images/{imageId}:
+    delete:
+      tags: [images]
+      summary: Eliminar imagen
+      description: Si se elimina la principal, la siguiente por `position` se promueve. Emite `product.product.updated`.
+      x-required-permission: product:update
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { $ref: '#/components/parameters/ProductId' }
+        - { name: imageId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Imagen eliminada }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /products/{id}/images/{imageId}/primary:
+    put:
+      tags: [images]
+      summary: Cambiar la imagen principal
+      description: Desmarca la actual y marca la indicada. Emite `product.product.updated`.
+      x-required-permission: product:update
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { $ref: '#/components/parameters/ProductId' }
+        - { name: imageId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Imagen principal actualizada }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------------
+  # Categorías
+  # ---------------------------------------------------------------------------
+  /categories:
+    get:
+      tags: [categories]
+      summary: Listar categorías
+      x-required-permission: product:read
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      responses:
+        '200':
+          description: Categorías (árbol plano; usar parentId para armar jerarquía en el front)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Category' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+    post:
+      tags: [categories]
+      summary: Crear categoría
+      x-required-permission: product:create
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCategoryRequest' }
+      responses:
+        '201':
+          description: Categoría creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Nombre duplicado en el mismo nivel
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /categories/{id}:
+    patch:
+      tags: [categories]
+      summary: Actualizar categoría
+      x-required-permission: product:update
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCategoryRequest' }
+      responses:
+        '200':
+          description: Actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    delete:
+      tags: [categories]
+      summary: Eliminar categoría (falla si tiene productos activos)
+      x-required-permission: product:delete
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Eliminada }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: Tiene productos activos asociados
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: CATEGORY_HAS_PRODUCTS, message: No se puede eliminar una categoría con productos activos. }
+
+  # ---------------------------------------------------------------------------
+  # Unidades de medida
+  # ---------------------------------------------------------------------------
+  /units:
+    get:
+      tags: [units]
+      summary: Listar unidades de medida
+      x-required-permission: product:read
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      responses:
+        '200':
+          description: Unidades
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Unit' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+    post:
+      tags: [units]
+      summary: Crear unidad de medida
+      x-required-permission: product:create
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUnitRequest' }
+            examples:
+              und: { value: { code: UND, name: Unidad } }
+              kg: { value: { code: KG, name: Kilogramo } }
+              hora: { value: { code: HORA, name: Hora } }
+      responses:
+        '201':
+          description: Unidad creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Unit' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Código ya existe en la organización
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /units/{id}:
+    patch:
+      tags: [units]
+      summary: Actualizar unidad de medida
+      x-required-permission: product:update
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUnitRequest' }
+      responses:
+        '200':
+          description: Actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Unit' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------------
+  # Catálogo de tasas (read-model de tax-service)
+  # ---------------------------------------------------------------------------
+  /tax-rates:
+    get:
+      tags: [catalog]
+      summary: Tasas de impuesto disponibles (read-model, por el país del contexto)
+      description: Del read-model local alimentado por tax-service. Útil para poblar el selector de IVA.
+      x-required-permission: product:read
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      responses:
+        '200':
+          description: Tasas del país de X-Country-Code
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TaxRate' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  parameters:
+    OrgHeader:
+      name: X-Organization-Id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    ProductId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+
+    ProductTax:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        taxRateId: { type: string, format: uuid }
+        kind: { type: string, enum: [vat, withholding_iva, withholding_rent, special], example: vat }
+
+    ProductImage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        productId: { type: string, format: uuid }
+        fileId: { type: string, format: uuid, description: Referencia al files-service (crm-minio); el front arma la URL. }
+        alt: { type: string, nullable: true }
+        isPrimary: { type: boolean }
+        position: { type: integer, example: 0 }
+
+    ProductSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        sku: { type: string, nullable: true }
+        name: { type: string }
+        type: { type: string, enum: [good, service] }
+        categoryId: { type: string, format: uuid, nullable: true }
+        unitId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+        price: { type: string, description: Precio en la unidad principal., example: "1299.99" }
+        priceCents: { type: integer, format: int64, example: 129999 }
+        currencyCode: { type: string, example: USD }
+        priceIncludesTax: { type: boolean }
+        imageFileId:
+          type: string
+          format: uuid
+          nullable: true
+          description: fileId de la imagen principal (files-service). Null si no tiene imágenes.
+
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        sku: { type: string, nullable: true }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        type: { type: string, enum: [good, service] }
+        categoryId: { type: string, format: uuid, nullable: true }
+        unitId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+        price: { type: string, example: "19.99" }
+        priceCents: { type: integer, format: int64, example: 1999 }
+        currencyCode: { type: string, example: USD }
+        priceIncludesTax: { type: boolean, description: Si el precio ya incluye IVA (billing lo usa para calcular la base). }
+        trackStock: { type: boolean, description: Flag para inventory-service (fase 2). }
+        taxes:
+          type: array
+          items: { $ref: '#/components/schemas/ProductTax' }
+        imageFileId: { type: string, format: uuid, nullable: true, description: fileId de la imagen principal (files-service). Null si no hay. }
+        images:
+          type: array
+          items: { $ref: '#/components/schemas/ProductImage' }
+        metadata: { type: object, nullable: true, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Category:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        parentId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    Unit:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        code: { type: string, example: UND }
+        name: { type: string, example: Unidad }
+
+    TaxRate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        countryCode: { type: string, example: EC }
+        code: { type: string, example: IVA15 }
+        name: { type: string, example: IVA 15% }
+        percentage: { type: string, example: "15.00", description: Tasa como string (NO centavos). }
+        kind: { type: string, enum: [vat, withholding_iva, withholding_rent, special] }
+        isDefault: { type: boolean }
+
+    # --- Requests -----------------------------------------------------------
+    CreateProductRequest:
+      type: object
+      required: [name, type, price, currencyCode]
+      properties:
+        name: { type: string, maxLength: 255 }
+        type: { type: string, enum: [good, service] }
+        price: { type: string, description: Precio en unidad principal ("19.99"). Dinero.js lo convierte a centavos. }
+        currencyCode: { type: string, minLength: 3, maxLength: 3, example: USD }
+        sku: { type: string, maxLength: 64 }
+        description: { type: string }
+        categoryId: { type: string, format: uuid }
+        unitId: { type: string, format: uuid }
+        taxRateIds:
+          type: array
+          items: { type: string, format: uuid }
+          description: Set inicial de impuestos (IDs del read-model de tax-service).
+        priceIncludesTax: { type: boolean, default: false }
+        metadata: { type: object, additionalProperties: true }
+
+    UpdateProductRequest:
+      type: object
+      description: Al menos un campo. No incluye impuestos (usar PUT /products/:id/taxes).
+      properties:
+        name: { type: string, maxLength: 255 }
+        sku: { type: string, maxLength: 64 }
+        description: { type: string }
+        price: { type: string }
+        currencyCode: { type: string, minLength: 3, maxLength: 3 }
+        categoryId: { type: string, format: uuid, nullable: true }
+        unitId: { type: string, format: uuid, nullable: true }
+        priceIncludesTax: { type: boolean }
+        status: { type: string, enum: [active, inactive] }
+        metadata: { type: object, additionalProperties: true }
+
+    UpdateTaxesRequest:
+      type: object
+      required: [taxRateIds]
+      properties:
+        taxRateIds:
+          type: array
+          items: { type: string, format: uuid }
+          description: Nuevo set completo de impuestos. Lista vacía elimina todos.
+
+    AddImageRequest:
+      type: object
+      required: [fileId]
+      properties:
+        fileId:
+          type: string
+          format: uuid
+          description: fileId devuelto por el files-service tras subir y confirmar la imagen (category product-image).
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        alt: { type: string, maxLength: 255 }
+        position: { type: integer, default: 0 }
+        isPrimary: { type: boolean, default: false }
+
+    CreateCategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 255 }
+        description: { type: string, maxLength: 255 }
+        parentId: { type: string, format: uuid }
+
+    UpdateCategoryRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 255 }
+        description: { type: string, maxLength: 255 }
+        status: { type: string, enum: [active, inactive] }
+
+    CreateUnitRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, maxLength: 20, example: UND }
+        name: { type: string, maxLength: 100, example: Unidad }
+
+    UpdateUnitRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 100 }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+  responses:
+    ValidationError:
+      description: Error de validación
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    OrgContextRequired:
+      description: Falta X-Organization-Id
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: ORG_CONTEXT_REQUIRED, message: Falta el contexto de organización. }
+    Forbidden:
+      description: Permiso insuficiente
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: FORBIDDEN, message: Permiso insuficiente. }
+    NotFound:
+      description: No encontrado o de otra organización
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: PRODUCT_NOT_FOUND, message: Producto no encontrado. }

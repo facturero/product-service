@@ -1,0 +1,257 @@
+asyncapi: 3.0.0
+
+info:
+  title: product-service — Eventos
+  version: 2.0.0
+  description: >
+    Eventos de product-service sobre RabbitMQ. Publica el ciclo de vida del producto
+    (creado / actualizado / desactivado). billing los consume para: validar que el
+    producto esté activo al crear líneas, congelar snapshots (nombre, precio en centavos,
+    impuestos) al emitir, y actualizar borradores si el precio o los impuestos cambian.
+
+
+    Consume `tax.tax_rate.upserted` para mantener el read-model local de tasas
+    (usado al asignar impuestos al producto y validar que pertenezcan al país correcto).
+
+
+    Los payloads de precio llevan `priceCents` (BIGINT) + `currencyCode` para que
+    billing pueda operar con Dinero.js directamente. Las tasas van como lista completa
+    para que billing actualice su snapshot en una sola operación.
+
+
+    Patrón Outbox (publicación) + `processed_events` (idempotencia al consumir).
+    Exchange topic `crm.events`; routing key = `type`. Nombres en pasado.
+
+defaultContentType: application/json
+
+servers:
+  rabbitmq:
+    host: localhost:5672
+    protocol: amqp
+    description: Broker RabbitMQ (dev). En producción, RABBITMQ_URL.
+    bindings:
+      amqp:
+        vhost: /
+
+channels:
+
+  productCreated:
+    address: product.product.created
+    description: Se creó un producto.
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp: { is: routingKey, exchange: { name: crm.events, type: topic, durable: true, vhost: / } }
+    messages:
+      productCreated: { $ref: '#/components/messages/ProductCreated' }
+
+  productUpdated:
+    address: product.product.updated
+    description: >
+      Cambió algún atributo del producto: nombre, precio, impuestos, imagen principal,
+      unidad, categoría. billing refresca snapshots en **borradores** (no en facturas
+      emitidas, que son inmutables).
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp: { is: routingKey, exchange: { name: crm.events, type: topic, durable: true, vhost: / } }
+    messages:
+      productUpdated: { $ref: '#/components/messages/ProductUpdated' }
+
+  productDisabled:
+    address: product.product.disabled
+    description: Producto desactivado. billing bloquea nuevas líneas con este producto.
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp: { is: routingKey, exchange: { name: crm.events, type: topic, durable: true, vhost: / } }
+    messages:
+      productDisabled: { $ref: '#/components/messages/ProductDisabled' }
+
+  taxRateUpserted:
+    address: tax.tax_rate.upserted
+    description: (Consumido) tax-service creó/actualizó una tasa; alimenta el read-model local.
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp: { is: routingKey, exchange: { name: crm.events, type: topic, durable: true, vhost: / } }
+    messages:
+      taxRateUpserted: { $ref: '#/components/messages/TaxRateUpserted' }
+
+operations:
+
+  publishProductCreated:
+    action: send
+    channel: { $ref: '#/channels/productCreated' }
+    summary: Emite product.product.created.
+
+  publishProductUpdated:
+    action: send
+    channel: { $ref: '#/channels/productUpdated' }
+    summary: >
+      Emite product.product.updated. Se dispara al editar datos, cambiar precio,
+      actualizar impuestos, o añadir/quitar/cambiar imagen principal.
+
+  publishProductDisabled:
+    action: send
+    channel: { $ref: '#/channels/productDisabled' }
+    summary: Emite product.product.disabled.
+
+  consumeTaxRateUpserted:
+    action: receive
+    channel: { $ref: '#/channels/taxRateUpserted' }
+    summary: Consume tax.tax_rate.upserted y hace upsert del read-model local `tax_rates`.
+
+components:
+
+  messageTraits:
+    eventEnvelope:
+      headers:
+        type: object
+        required: [eventId, type, occurredAt]
+        properties:
+          eventId:
+            type: string
+            format: uuid
+            description: Identificador único del evento (idempotencia).
+          type:
+            type: string
+            description: Tipo del evento = routing key.
+          occurredAt:
+            type: string
+            format: date-time
+          organizationId:
+            type: string
+            format: uuid
+            nullable: true
+
+  messages:
+
+    ProductCreated:
+      name: product.product.created
+      title: Producto creado
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/ProductEventPayload' }
+
+    ProductUpdated:
+      name: product.product.updated
+      title: Producto actualizado
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/ProductEventPayload' }
+
+    ProductDisabled:
+      name: product.product.disabled
+      title: Producto desactivado
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/ProductDisabledPayload' }
+
+    TaxRateUpserted:
+      name: tax.tax_rate.upserted
+      title: Tasa de impuesto (consumida de tax-service)
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/TaxRatePayload' }
+
+  schemas:
+
+    ProductEventPayload:
+      type: object
+      required: [productId, organizationId, name, type, priceCents, currencyCode, priceIncludesTax, status]
+      description: >
+        Payload completo para que billing pueda congelar el snapshot sin más consultas.
+        `priceCents` en BIGINT + `currencyCode` para Dinero.js. `taxes` con el set
+        completo de impuestos del producto en el momento del evento.
+      properties:
+        productId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+          nullable: true
+        name:
+          type: string
+          example: Laptop Dell XPS 13
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [good, service]
+        priceCents:
+          type: integer
+          format: int64
+          description: Precio en centavos (BIGINT). Usar Dinero.js para operar.
+          example: 129999
+        currencyCode:
+          type: string
+          description: ISO 4217.
+          example: USD
+        priceIncludesTax:
+          type: boolean
+          description: Si el precio ya incluye IVA. billing lo usa para calcular base e impuesto.
+        taxes:
+          type: array
+          description: Set completo de impuestos en el momento del evento.
+          items:
+            type: object
+            required: [taxRateId, kind]
+            properties:
+              taxRateId:
+                type: string
+                format: uuid
+              kind:
+                type: string
+                enum: [vat, withholding_iva, withholding_rent, special]
+        imageFileId:
+          type: string
+          format: uuid
+          nullable: true
+          description: fileId de la imagen principal (files-service/crm-minio) al momento del evento. Null si no tiene.
+        status:
+          type: string
+          enum: [active, inactive]
+
+    ProductDisabledPayload:
+      type: object
+      required: [productId, organizationId]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+
+    TaxRatePayload:
+      type: object
+      required: [id, countryCode, code, percentage, kind]
+      description: Fila completa del read-model para upsert local (viene de tax-service).
+      properties:
+        id:
+          type: string
+          format: uuid
+        countryCode:
+          type: string
+          example: EC
+        code:
+          type: string
+          example: IVA15
+        name:
+          type: string
+          example: IVA 15%
+        percentage:
+          type: string
+          description: >
+            Tasa como string decimal ("15.00"). NO en centavos — es un porcentaje.
+            Usar `parseFloat(percentage)` o Decimal solo para mostrar; para aplicar al
+            precio usar Dinero.js con la escala correcta.
+          example: "15.00"
+        kind:
+          type: string
+          enum: [vat, withholding_iva, withholding_rent, special]
+          example: vat
+        isDefault:
+          type: boolean
+          example: true
