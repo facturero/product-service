@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CreateProductUseCase } from '../application/use-cases/create-product.js';
 import { GetProductUseCase } from '../application/use-cases/get-product.js';
 import { createInMemoryRepositories } from './helpers.js';
-import { SkuAlreadyExistsError, CategoryNotFoundError, UnitNotFoundError, TaxRateNotFoundError } from '../domain/errors.js';
+import { MultipleTaxKindError, SkuAlreadyExistsError, CategoryNotFoundError, UnitNotFoundError, TaxRateNotFoundError } from '../domain/errors.js';
 import { UnitOfWork } from '../application/ports.js';
 import { Repositories } from '../domain/repositories.js';
 
@@ -94,6 +94,25 @@ describe('CreateProductUseCase', () => {
       currencyCode: 'USD',
       unitId: 'nonexistent-id',
     })).rejects.toThrow(UnitNotFoundError);
+  });
+
+  it('lanza MultipleTaxKindError si se envian dos tasas del mismo kind', async () => {
+    const repos = createInMemoryRepositories();
+    const uow = new InMemoryUnitOfWork(repos);
+    const useCase = new CreateProductUseCase(uow);
+
+    repos.taxRates.upsert({ id: 'vat-15', countryCode: 'EC', code: 'IVA15', name: 'IVA 15%', percentage: '15.00', kind: 'vat' as const, isDefault: true });
+    repos.taxRates.upsert({ id: 'vat-0', countryCode: 'EC', code: 'IVA0', name: 'IVA 0%', percentage: '0.00', kind: 'vat' as const, isDefault: false });
+
+    await expect(useCase.execute({
+      organizationId: 'org-1',
+      countryCode: 'EC',
+      name: 'Producto',
+      type: 'good',
+      price: '10.00',
+      currencyCode: 'USD',
+      taxRateIds: ['vat-15', 'vat-0'],
+    })).rejects.toThrow(MultipleTaxKindError);
   });
 
   it('lanza TaxRateNotFoundError si la tasa no existe en el país', async () => {

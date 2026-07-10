@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { Money } from '../../domain/value-objects.js';
-import { ProductNotFoundError, TaxRateNotFoundError } from '../../domain/errors.js';
+import {
+  MultipleTaxKindError,
+  ProductNotFoundError,
+  TaxRateNotFoundError,
+} from '../../domain/errors.js';
 import { ProductTax } from '../../domain/entities.js';
 import { UnitOfWork } from '../ports.js';
 import { ProductDetailDTO } from '../dtos.js';
@@ -15,10 +19,31 @@ export class UpdateProductTaxesUseCase {
 
       await repos.productTaxes.deleteByProduct(input.productId);
 
+      // 1. Resolver todas las tasas contra el read-model del país.
+      const rates = [];
       for (const taxRateId of input.taxRateIds) {
         const rate = await repos.taxRates.findByIdAndCountry(taxRateId, input.countryCode);
         if (!rate) throw new TaxRateNotFoundError();
-        const pt = ProductTax.create({ productId: input.productId, taxRateId, kind: rate.kind });
+        rates.push({ taxRateId, kind: rate.kind });
+      }
+
+      // 2. Validar unicidad por `kind`: un producto no puede tener dos tasas
+      //    del mismo tipo (ej. dos IVA). Ver docs/IMPUESTOS.md.
+      const kindCounts = new Map<string, number>();
+      for (const r of rates) {
+        kindCounts.set(r.kind, (kindCounts.get(r.kind) ?? 0) + 1);
+      }
+      for (const [kind, count] of kindCounts) {
+        if (count > 1) throw new MultipleTaxKindError(kind);
+      }
+
+      // 3. Persistir.
+      for (const r of rates) {
+        const pt = ProductTax.create({
+          productId: input.productId,
+          taxRateId: r.taxRateId,
+          kind: r.kind,
+        });
         await repos.productTaxes.save(pt);
       }
 

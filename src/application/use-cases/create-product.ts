@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { Money } from '../../domain/value-objects.js';
-import { CategoryNotFoundError, SkuAlreadyExistsError, TaxRateNotFoundError, UnitNotFoundError } from '../../domain/errors.js';
+import {
+  CategoryNotFoundError,
+  MultipleTaxKindError,
+  SkuAlreadyExistsError,
+  TaxRateNotFoundError,
+  UnitNotFoundError,
+} from '../../domain/errors.js';
 import { Product, ProductTax } from '../../domain/entities.js';
 import { UnitOfWork } from '../ports.js';
 import { CreateProductInput, ProductDetailDTO } from '../dtos.js';
@@ -44,10 +50,27 @@ export class CreateProductUseCase {
       await repos.products.save(product);
 
       if (input.taxRateIds && input.taxRateIds.length > 0) {
+        // Resolver tasas y validar unicidad por `kind` antes de persistir.
+        // Ver docs/IMPUESTOS.md.
+        const rates = [];
         for (const taxRateId of input.taxRateIds) {
           const rate = await repos.taxRates.findByIdAndCountry(taxRateId, input.countryCode);
           if (!rate) throw new TaxRateNotFoundError();
-          const pt = ProductTax.create({ productId: product.id, taxRateId, kind: rate.kind });
+          rates.push({ taxRateId, kind: rate.kind });
+        }
+        const kindCounts = new Map<string, number>();
+        for (const r of rates) {
+          kindCounts.set(r.kind, (kindCounts.get(r.kind) ?? 0) + 1);
+        }
+        for (const [kind, count] of kindCounts) {
+          if (count > 1) throw new MultipleTaxKindError(kind);
+        }
+        for (const r of rates) {
+          const pt = ProductTax.create({
+            productId: product.id,
+            taxRateId: r.taxRateId,
+            kind: r.kind,
+          });
           await repos.productTaxes.save(pt);
         }
       }

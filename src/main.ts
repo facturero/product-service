@@ -3,7 +3,7 @@ import { config } from './infrastructure/config.js';
 import { sequelize } from './infrastructure/persistence/sequelize.js';
 import './infrastructure/persistence/models.js';
 import { buildRepositories, SequelizeUnitOfWork } from './infrastructure/persistence/repositories.js';
-import { startConsumers } from './infrastructure/messaging/consumer.js';
+import { TaxRateHttpRepository } from './infrastructure/http/tax-rate-http-repository.js';
 import { CreateProductUseCase } from './application/use-cases/create-product.js';
 import { GetProductUseCase } from './application/use-cases/get-product.js';
 import { ListProductsUseCase } from './application/use-cases/list-products.js';
@@ -27,8 +27,9 @@ import { createApp } from './interface/http/app.js';
 async function main(): Promise<void> {
   await sequelize.authenticate();
 
-  const repos = buildRepositories();
-  const uow = new SequelizeUnitOfWork();
+  const taxRateRepo = new TaxRateHttpRepository(config.TAX_SERVICE_URL, config.INTERNAL_USER_ID);
+  const repos = buildRepositories(undefined, taxRateRepo);
+  const uow = new SequelizeUnitOfWork(taxRateRepo);
 
   const getProductUseCase = new GetProductUseCase(repos);
 
@@ -55,8 +56,6 @@ async function main(): Promise<void> {
     },
     corsOrigin: config.CORS_ORIGIN,
   });
-
-  await startConsumers();
 
   serve({ fetch: app.fetch, port: config.PORT });
   console.log(`[product-service] corriendo en puerto ${config.PORT}`);

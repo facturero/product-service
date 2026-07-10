@@ -6,7 +6,6 @@ import {
   ProductImageModel,
   ProductModel,
   ProductTaxModel,
-  TaxRateModel,
   UnitModel,
 } from './models.js';
 import {
@@ -14,7 +13,6 @@ import {
   Product,
   ProductImage,
   ProductTax,
-  TaxRate,
   Unit,
 } from '../../domain/entities.js';
 import {
@@ -97,18 +95,6 @@ function toProductImage(m: ProductImageModel): ProductImage {
     isPrimary: m.is_primary,
     position: m.position,
     createdAt: m.created_at,
-  });
-}
-
-function toTaxRate(m: TaxRateModel): TaxRate {
-  return TaxRate.fromPersistence({
-    id: m.id,
-    countryCode: m.country_code,
-    code: m.code,
-    name: m.name,
-    percentage: m.percentage,
-    kind: m.kind,
-    isDefault: m.is_default,
   });
 }
 
@@ -331,47 +317,6 @@ function productImageRepository(tx?: Transaction): ProductImageRepository {
   };
 }
 
-function taxRateReadModelRepository(tx?: Transaction): TaxRateReadModelRepository {
-  return {
-    async findById(id) {
-      const m = await TaxRateModel.findByPk(id, { transaction: tx });
-      return m ? toTaxRate(m) : null;
-    },
-    async findByIdAndCountry(id, countryCode) {
-      const m = await TaxRateModel.findOne({
-        where: { id, country_code: countryCode },
-        transaction: tx,
-      });
-      return m ? toTaxRate(m) : null;
-    },
-    async listByCountry(countryCode) {
-      const rows = await TaxRateModel.findAll({
-        where: { country_code: countryCode },
-        transaction: tx,
-        order: [['code', 'ASC']],
-      });
-      return rows.map(toTaxRate);
-    },
-    async upsert(rate) {
-      const p = rate.toPersistence();
-      await TaxRateModel.upsert(
-        {
-          id: p.id,
-          country_code: p.countryCode,
-          code: p.code,
-          name: p.name,
-          percentage: p.percentage,
-          kind: p.kind,
-          is_default: p.isDefault,
-          created_at: new Date(),
-          updated_at: new Date(),
-        },
-        { transaction: tx },
-      );
-    },
-  };
-}
-
 function outboxRepository(tx?: Transaction): OutboxRepository {
   return {
     async add(event: DomainEvent) {
@@ -391,20 +336,22 @@ function outboxRepository(tx?: Transaction): OutboxRepository {
   };
 }
 
-export function buildRepositories(tx?: Transaction): Repositories {
+export function buildRepositories(tx: Transaction | undefined, taxRatesOverride: TaxRateReadModelRepository): Repositories {
   return {
     products: productRepository(tx),
     categories: categoryRepository(tx),
     units: unitRepository(tx),
     productTaxes: productTaxRepository(tx),
     productImages: productImageRepository(tx),
-    taxRates: taxRateReadModelRepository(tx),
+    taxRates: taxRatesOverride,
     outbox: outboxRepository(tx),
   };
 }
 
 export class SequelizeUnitOfWork implements UnitOfWork {
+  constructor(private readonly taxRatesOverride: TaxRateReadModelRepository) {}
+
   async execute<T>(work: (repos: Repositories) => Promise<T>): Promise<T> {
-    return sequelize.transaction(async (tx) => work(buildRepositories(tx)));
+    return sequelize.transaction(async (tx) => work(buildRepositories(tx, this.taxRatesOverride)));
   }
 }

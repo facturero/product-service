@@ -145,36 +145,6 @@ ProductImageModel.init(
   { sequelize, tableName: 'product_images', timestamps: false },
 );
 
-export class TaxRateModel extends Model<
-  InferAttributes<TaxRateModel>,
-  InferCreationAttributes<TaxRateModel>
-> {
-  declare id: string;
-  declare country_code: string;
-  declare code: string;
-  declare name: string | null;
-  declare percentage: string;
-  declare kind: 'vat' | 'withholding_iva' | 'withholding_rent' | 'special';
-  declare is_default: boolean;
-  declare created_at: Date;
-  declare updated_at: Date;
-}
-
-TaxRateModel.init(
-  {
-    id: { type: DataTypes.CHAR(36), primaryKey: true },
-    country_code: { type: DataTypes.STRING(2), allowNull: false },
-    code: { type: DataTypes.STRING(20), allowNull: false },
-    name: { type: DataTypes.STRING(100), allowNull: true },
-    percentage: { type: DataTypes.DECIMAL(6, 2), allowNull: false },
-    kind: { type: DataTypes.ENUM('vat', 'withholding_iva', 'withholding_rent', 'special'), allowNull: false },
-    is_default: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-    created_at: DataTypes.DATE,
-    updated_at: DataTypes.DATE,
-  },
-  { sequelize, tableName: 'tax_rates', timestamps: false },
-);
-
 export class OutboxModel extends Model<
   InferAttributes<OutboxModel>,
   InferCreationAttributes<OutboxModel>

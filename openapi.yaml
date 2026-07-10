@@ -122,7 +122,18 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
               example: { code: SKU_EXISTS, message: Ya existe un producto con ese SKU. }
-        '422': { $ref: '#/components/responses/ValidationError' }
+        '422':
+          description: Error de validación
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                validation:
+                  summary: Error de validación de campos
+                  value: { code: VALIDATION_ERROR, message: Error de validación, details: [{ field: price, message: Precio inválido }] }
+                duplicate_kind:
+                  summary: Dos tasas del mismo tipo
+                  value: { code: MULTIPLE_TAX_KIND, message: Un producto solo puede tener una tasa del tipo "vat". }
 
   /products/{id}:
     get:
@@ -203,10 +214,17 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422':
-          description: Alguna tasa no existe o no pertenece al país del contexto
+          description: Error de validación (tasa no encontrada, tasas duplicadas del mismo tipo)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                not_found:
+                  summary: Tasa no encontrada en el país del contexto
+                  value: { code: TAX_RATE_NOT_FOUND, message: La tasa de impuesto no existe o no pertenece al país. }
+                duplicate_kind:
+                  summary: Dos tasas del mismo tipo (ej. dos IVA)
+                  value: { code: MULTIPLE_TAX_KIND, message: Un producto solo puede tener una tasa del tipo "vat". }
 
   /products/{id}/disable:
     post:

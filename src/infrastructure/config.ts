@@ -11,6 +11,8 @@ const schema = z.object({
   DB_NAME: z.string().min(1),
   RABBITMQ_URL: z.string().optional(),
   CORS_ORIGIN: z.string().default('*'),
+  TAX_SERVICE_URL: z.string().default('http://tax-service:3005'),
+  INTERNAL_USER_ID: z.string().default('00000000-0000-0000-0000-000000000000'),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -35,6 +37,8 @@ export interface AppConfig {
   DB_NAME: string;
   RABBITMQ_URL: string | undefined;
   CORS_ORIGIN: string;
+  TAX_SERVICE_URL: string;
+  INTERNAL_USER_ID: string;
 }
 
 export const config: AppConfig = {
@@ -47,4 +51,6 @@ export const config: AppConfig = {
   DB_NAME: env.DB_NAME,
   RABBITMQ_URL: env.RABBITMQ_URL,
   CORS_ORIGIN: env.CORS_ORIGIN,
+  TAX_SERVICE_URL: env.TAX_SERVICE_URL,
+  INTERNAL_USER_ID: env.INTERNAL_USER_ID,
 };

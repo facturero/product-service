@@ -3,7 +3,7 @@ import { CreateProductUseCase } from '../application/use-cases/create-product.js
 import { UpdateProductTaxesUseCase } from '../application/use-cases/update-product-taxes.js';
 import { GetProductUseCase } from '../application/use-cases/get-product.js';
 import { createInMemoryRepositories } from './helpers.js';
-import { ProductNotFoundError, TaxRateNotFoundError } from '../domain/errors.js';
+import { MultipleTaxKindError, ProductNotFoundError, TaxRateNotFoundError } from '../domain/errors.js';
 import { TaxKind } from '../domain/entities.js';
 import { UnitOfWork } from '../application/ports.js';
 import { Repositories } from '../domain/repositories.js';
@@ -43,24 +43,39 @@ function seedTaxRate(repos: Repositories, overrides: Partial<{ id: string; count
 }
 
 describe('UpdateProductTaxesUseCase', () => {
-  it('actualiza los impuestos de un producto correctamente', async () => {
+  it('actualiza los impuestos con una sola tasa de IVA correctamente', async () => {
     const repos = createInMemoryRepositories();
     const uow = new InMemoryUnitOfWork(repos);
     const product = await createTestProduct(repos, uow);
     seedTaxRate(repos, { id: 'tax-rate-1', code: 'IVA15', kind: 'vat' });
-    seedTaxRate(repos, { id: 'tax-rate-2', code: 'IVA5', kind: 'vat' });
 
     const useCase = new UpdateProductTaxesUseCase(uow);
     const result = await useCase.execute({
       organizationId: 'org-1',
       productId: product.id,
       countryCode: 'EC',
-      taxRateIds: ['tax-rate-1', 'tax-rate-2'],
+      taxRateIds: ['tax-rate-1'],
     });
 
-    expect(result.taxes.length).toBe(2);
-    expect(result.taxes.map((t) => t.taxRateId)).toContain('tax-rate-1');
-    expect(result.taxes.map((t) => t.kind)).toEqual(['vat', 'vat']);
+    expect(result.taxes.length).toBe(1);
+    expect(result.taxes[0].taxRateId).toBe('tax-rate-1');
+    expect(result.taxes[0].kind).toBe('vat');
+  });
+
+  it('lanza MultipleTaxKindError si se envian dos tasas del mismo kind', async () => {
+    const repos = createInMemoryRepositories();
+    const uow = new InMemoryUnitOfWork(repos);
+    const product = await createTestProduct(repos, uow);
+    seedTaxRate(repos, { id: 'tax-rate-1', code: 'IVA15', kind: 'vat' });
+    seedTaxRate(repos, { id: 'tax-rate-2', code: 'IVA0', kind: 'vat' });
+
+    const useCase = new UpdateProductTaxesUseCase(uow);
+    await expect(useCase.execute({
+      organizationId: 'org-1',
+      productId: product.id,
+      countryCode: 'EC',
+      taxRateIds: ['tax-rate-1', 'tax-rate-2'],
+    })).rejects.toThrow(MultipleTaxKindError);
   });
 
   it('reemplaza los impuestos anteriores al actualizar', async () => {

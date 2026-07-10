@@ -109,3 +109,16 @@ export class InvalidMoneyAmountError extends AppError {
   readonly httpStatus = 422;
   constructor(message = 'El monto ingresado no es válido.') { super(message); }
 }
+
+/**
+ * Un producto solo puede tener UNA tasa por cada tipo de impuesto (`kind`):
+ * un IVA, una retención de IVA, una retención de renta, un ICE. Nunca dos IVA
+ * al mismo tiempo (ej. 0% y 15%). Ver `docs/IMPUESTOS.md`.
+ */
+export class MultipleTaxKindError extends AppError {
+  readonly code = 'MULTIPLE_TAX_KIND';
+  readonly httpStatus = 422;
+  constructor(kind: string) {
+    super(`Un producto solo puede tener una tasa del tipo "${kind}".`);
+  }
+}
