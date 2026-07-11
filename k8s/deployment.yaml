@@ -55,7 +55,7 @@ spec:
                   name: product-rabbitmq
                   key: url
             - name: CORS_ORIGIN
-              value: "https://tudominio.com"
+              value: "https://steep-geology-napping.ngrok-free.dev"
           resources:
             requests:
               memory: "128Mi"
