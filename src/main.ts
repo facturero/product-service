@@ -26,6 +26,7 @@ import { createApp } from './interface/http/app.js';
 
 async function main(): Promise<void> {
   await sequelize.authenticate();
+  await sequelize.sync();
 
   const taxRateRepo = new TaxRateHttpRepository(config.TAX_SERVICE_URL, config.INTERNAL_USER_ID);
   const repos = buildRepositories(undefined, taxRateRepo);
