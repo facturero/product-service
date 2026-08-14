@@ -56,6 +56,10 @@ spec:
                   key: url
             - name: CORS_ORIGIN
               value: "https://steep-geology-napping.ngrok-free.dev"
+            - name: OTEL_SERVICE_NAME
+              value: "product-service"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4318"
           resources:
             requests:
               memory: "128Mi"
