@@ -26,6 +26,8 @@ export class UpdateProductUseCase {
         unitId: input.unitId,
         priceIncludesTax: input.priceIncludesTax,
         trackStock: input.trackStock,
+        allowNegativeStock: input.allowNegativeStock,
+        valuationMethod: input.valuationMethod,
         status: input.status,
         metadata: input.metadata,
       });
@@ -57,6 +59,9 @@ export class UpdateProductUseCase {
           priceCents: product.priceCents,
           currencyCode: product.currencyCode,
           priceIncludesTax: product.priceIncludesTax,
+          trackStock: product.trackStock,
+          allowNegativeStock: product.allowNegativeStock,
+          valuationMethod: product.valuationMethod,
           taxes: taxes.map((t) => ({ taxRateId: t.taxRateId, kind: t.kind })),
           imageFileId: primaryImage?.fileId ?? null,
           status: product.status,
@@ -79,6 +84,8 @@ export class UpdateProductUseCase {
         currencyCode: product.currencyCode,
         priceIncludesTax: product.priceIncludesTax,
         trackStock: product.trackStock,
+        allowNegativeStock: product.allowNegativeStock,
+        valuationMethod: product.valuationMethod,
         taxes: taxes.map((t) => ({ id: t.id, taxRateId: t.taxRateId, kind: t.kind })),
         images: images.map((i) => ({
           id: i.id,

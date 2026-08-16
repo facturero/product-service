@@ -33,6 +33,8 @@ export class GetProductUseCase {
       currencyCode: product.currencyCode,
       priceIncludesTax: product.priceIncludesTax,
       trackStock: product.trackStock,
+      allowNegativeStock: product.allowNegativeStock,
+      valuationMethod: product.valuationMethod,
       taxes: taxes.map((t) => ({ id: t.id, taxRateId: t.taxRateId, kind: t.kind })),
       images: images.map((i) => ({
         id: i.id,

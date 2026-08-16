@@ -1,4 +1,4 @@
-import { TaxKind } from '../domain/entities.js';
+import { TaxKind, ValuationMethod } from '../domain/entities.js';
 
 // ── Product ─────────────────────────────────────────────────────────────────
 
@@ -21,6 +21,8 @@ export interface ProductSummaryDTO {
 export interface ProductDetailDTO extends ProductSummaryDTO {
   description: string | null;
   trackStock: boolean;
+  allowNegativeStock: boolean;
+  valuationMethod: ValuationMethod;
   taxes: ProductTaxDTO[];
   images: ProductImageDTO[];
   metadata: Record<string, unknown> | null;
@@ -89,6 +91,9 @@ export interface CreateProductInput {
   unitId?: string | null;
   taxRateIds?: string[];
   priceIncludesTax?: boolean;
+  trackStock?: boolean;
+  allowNegativeStock?: boolean;
+  valuationMethod?: ValuationMethod;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -106,6 +111,8 @@ export interface UpdateProductInput {
   currencyCode?: string;
   priceIncludesTax?: boolean;
   trackStock?: boolean;
+  allowNegativeStock?: boolean;
+  valuationMethod?: ValuationMethod;
   status?: 'active' | 'inactive';
   metadata?: Record<string, unknown> | null;
 }

@@ -69,6 +69,8 @@ export class ProductModel extends Model<
   declare currency_code: string;
   declare price_includes_tax: boolean;
   declare track_stock: boolean;
+  declare allow_negative_stock: boolean;
+  declare valuation_method: 'weighted_average' | 'fifo';
   declare status: 'active' | 'inactive';
   declare metadata: unknown | null;
   declare created_at: Date;
@@ -89,6 +91,8 @@ ProductModel.init(
     currency_code: { type: DataTypes.CHAR(3), allowNull: false, defaultValue: 'USD' },
     price_includes_tax: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     track_stock: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    allow_negative_stock: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    valuation_method: { type: DataTypes.ENUM('weighted_average', 'fifo'), allowNull: false, defaultValue: 'weighted_average' },
     status: { type: DataTypes.ENUM('active', 'inactive'), allowNull: false, defaultValue: 'active' },
     metadata: { type: DataTypes.JSON, allowNull: true },
     created_at: DataTypes.DATE,

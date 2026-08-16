@@ -579,7 +579,14 @@ components:
         priceCents: { type: integer, format: int64, example: 1999 }
         currencyCode: { type: string, example: USD }
         priceIncludesTax: { type: boolean, description: Si el precio ya incluye IVA (billing lo usa para calcular la base). }
-        trackStock: { type: boolean, description: Flag para inventory-service (fase 2). }
+        trackStock: { type: boolean, description: Si es true, inventory-service lleva stock de este producto. }
+        allowNegativeStock:
+          type: boolean
+          description: Si es true, billing puede facturar aunque no haya stock (inventory emite alerta). Si es false, la falta de stock bloquea la venta.
+        valuationMethod:
+          type: string
+          enum: [weighted_average, fifo]
+          description: Estrategia de valorización que inventory-service aplica al calcular el costo de salida.
         taxes:
           type: array
           items: { $ref: '#/components/schemas/ProductTax' }
@@ -638,6 +645,13 @@ components:
           items: { type: string, format: uuid }
           description: Set inicial de impuestos (IDs del read-model de tax-service).
         priceIncludesTax: { type: boolean, default: false }
+        trackStock: { type: boolean, default: false, description: Si true, inventory-service llevará stock. }
+        allowNegativeStock: { type: boolean, default: false, description: Si true, billing permite vender sin stock (inventory solo alerta). }
+        valuationMethod:
+          type: string
+          enum: [weighted_average, fifo]
+          default: weighted_average
+          description: Estrategia de valorización de inventory-service.
         metadata: { type: object, additionalProperties: true }
 
     UpdateProductRequest:
@@ -652,6 +666,9 @@ components:
         categoryId: { type: string, format: uuid, nullable: true }
         unitId: { type: string, format: uuid, nullable: true }
         priceIncludesTax: { type: boolean }
+        trackStock: { type: boolean }
+        allowNegativeStock: { type: boolean }
+        valuationMethod: { type: string, enum: [weighted_average, fifo] }
         status: { type: string, enum: [active, inactive] }
         metadata: { type: object, additionalProperties: true }
 

@@ -24,6 +24,7 @@ import { UpdateUnitUseCase } from './application/use-cases/update-unit.js';
 import { ListUnitsUseCase } from './application/use-cases/list-units.js';
 import { ListTaxRatesUseCase } from './application/use-cases/list-tax-rates.js';
 import { createApp } from './interface/http/app.js';
+import { OutboxRelay } from './infrastructure/messaging/relay.js';
 
 async function main(): Promise<void> {
   await sequelize.authenticate();
@@ -61,6 +62,16 @@ async function main(): Promise<void> {
 
   serve({ fetch: app.fetch, port: config.PORT });
   console.log(`[product-service] corriendo en puerto ${config.PORT}`);
+
+  // Relay del outbox a RabbitMQ: publica product.product.* para que el
+  // gateway lo reenvíe en tiempo real a los POS conectados.
+  if (config.RABBITMQ_URL) {
+    const relay = new OutboxRelay();
+    await relay.start(config.RABBITMQ_URL);
+    console.log('[product-service] outbox relay a RabbitMQ activo');
+  } else {
+    console.warn('[product-service] RABBITMQ_URL no configurado: eventos NO se publican');
+  }
 }
 
 main().catch((err) => {

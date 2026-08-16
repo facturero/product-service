@@ -13,6 +13,9 @@ export const createProductSchema = z.object({
   unitId: z.string().uuid().optional(),
   taxRateIds: z.array(z.string().uuid()).optional(),
   priceIncludesTax: z.boolean().default(false),
+  trackStock: z.boolean().default(false),
+  allowNegativeStock: z.boolean().default(false),
+  valuationMethod: z.enum(['weighted_average', 'fifo']).default('weighted_average'),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -26,6 +29,9 @@ export const updateProductSchema = z.object({
   price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'El precio debe ser un número válido con hasta 2 decimales.').optional(),
   currencyCode: z.string().length(3).optional(),
   priceIncludesTax: z.boolean().optional(),
+  trackStock: z.boolean().optional(),
+  allowNegativeStock: z.boolean().optional(),
+  valuationMethod: z.enum(['weighted_average', 'fifo']).optional(),
   status: z.enum(['active', 'inactive']).optional(),
   metadata: z.record(z.unknown()).optional().nullable(),
 });

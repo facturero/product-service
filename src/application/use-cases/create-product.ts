@@ -44,6 +44,9 @@ export class CreateProductUseCase {
         categoryId: input.categoryId ?? null,
         unitId: input.unitId ?? null,
         priceIncludesTax: input.priceIncludesTax ?? false,
+        trackStock: input.trackStock ?? false,
+        allowNegativeStock: input.allowNegativeStock ?? false,
+        valuationMethod: input.valuationMethod ?? 'weighted_average',
         metadata: input.metadata ?? null,
       });
 
@@ -94,6 +97,9 @@ export class CreateProductUseCase {
           priceCents: product.priceCents,
           currencyCode: product.currencyCode,
           priceIncludesTax: product.priceIncludesTax,
+          trackStock: product.trackStock,
+          allowNegativeStock: product.allowNegativeStock,
+          valuationMethod: product.valuationMethod,
           taxes: taxes.map((t) => ({ taxRateId: t.taxRateId, kind: t.kind })),
           imageFileId: primaryImage?.fileId ?? null,
           status: product.status,
@@ -116,6 +122,8 @@ export class CreateProductUseCase {
         currencyCode: product.currencyCode,
         priceIncludesTax: product.priceIncludesTax,
         trackStock: product.trackStock,
+        allowNegativeStock: product.allowNegativeStock,
+        valuationMethod: product.valuationMethod,
         taxes: taxes.map((t) => ({ id: t.id, taxRateId: t.taxRateId, kind: t.kind })),
         images: images.map((i) => ({
           id: i.id,

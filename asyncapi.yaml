@@ -191,6 +191,16 @@ components:
         priceIncludesTax:
           type: boolean
           description: Si el precio ya incluye IVA. billing lo usa para calcular base e impuesto.
+        trackStock:
+          type: boolean
+          description: Si true, inventory-service lleva stock de este producto.
+        allowNegativeStock:
+          type: boolean
+          description: Si true, billing permite emitir sin stock (inventory solo alerta con inventory.stock.negative).
+        valuationMethod:
+          type: string
+          enum: [weighted_average, fifo]
+          description: Estrategia de valorización que inventory-service aplica al calcular el costo de salida.
         taxes:
           type: array
           description: Set completo de impuestos en el momento del evento.

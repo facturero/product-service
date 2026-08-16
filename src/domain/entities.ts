@@ -4,6 +4,7 @@ export type ProductType = 'good' | 'service';
 export type ProductStatus = 'active' | 'inactive';
 export type CategoryStatus = 'active' | 'inactive';
 export type TaxKind = 'vat' | 'withholding_iva' | 'withholding_rent' | 'special';
+export type ValuationMethod = 'weighted_average' | 'fifo';
 
 // ── Category ────────────────────────────────────────────────────────────────
 
@@ -140,6 +141,8 @@ export interface ProductProps {
   currencyCode: string;
   priceIncludesTax: boolean;
   trackStock: boolean;
+  allowNegativeStock: boolean;
+  valuationMethod: ValuationMethod;
   status: ProductStatus;
   metadata: Record<string, unknown> | null;
   createdAt: Date;
@@ -161,6 +164,8 @@ export class Product {
     unitId?: string | null;
     priceIncludesTax?: boolean;
     trackStock?: boolean;
+    allowNegativeStock?: boolean;
+    valuationMethod?: ValuationMethod;
     metadata?: Record<string, unknown> | null;
   }): Product {
     const now = new Date();
@@ -177,6 +182,8 @@ export class Product {
       currencyCode: params.currencyCode,
       priceIncludesTax: params.priceIncludesTax ?? false,
       trackStock: params.trackStock ?? false,
+      allowNegativeStock: params.allowNegativeStock ?? false,
+      valuationMethod: params.valuationMethod ?? 'weighted_average',
       status: 'active',
       metadata: params.metadata ?? null,
       createdAt: now,
@@ -200,6 +207,8 @@ export class Product {
   get currencyCode(): string { return this.props.currencyCode; }
   get priceIncludesTax(): boolean { return this.props.priceIncludesTax; }
   get trackStock(): boolean { return this.props.trackStock; }
+  get allowNegativeStock(): boolean { return this.props.allowNegativeStock; }
+  get valuationMethod(): ValuationMethod { return this.props.valuationMethod; }
   get status(): ProductStatus { return this.props.status; }
   get metadata(): Record<string, unknown> | null { return this.props.metadata; }
   get createdAt(): Date { return this.props.createdAt; }
@@ -218,6 +227,8 @@ export class Product {
     type?: ProductType;
     priceIncludesTax?: boolean;
     trackStock?: boolean;
+    allowNegativeStock?: boolean;
+    valuationMethod?: ValuationMethod;
     metadata?: Record<string, unknown> | null;
     status?: ProductStatus;
   }): void {
@@ -229,6 +240,8 @@ export class Product {
     if (params.type !== undefined) this.props.type = params.type;
     if (params.priceIncludesTax !== undefined) this.props.priceIncludesTax = params.priceIncludesTax;
     if (params.trackStock !== undefined) this.props.trackStock = params.trackStock;
+    if (params.allowNegativeStock !== undefined) this.props.allowNegativeStock = params.allowNegativeStock;
+    if (params.valuationMethod !== undefined) this.props.valuationMethod = params.valuationMethod;
     if (params.metadata !== undefined) this.props.metadata = params.metadata;
     if (params.status !== undefined) this.props.status = params.status;
     this.props.updatedAt = new Date();
