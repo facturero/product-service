@@ -15,6 +15,14 @@ info:
     simultaneamente. `PUT /products/:id/taxes` reemplaza el set completo.
 
 
+    Establecimientos: relación M:N (`product_establishments`) con
+    `establishment_ids` que viven en organization-service (validados service a
+    service). Un producto DEBE estar asignado a al menos un establecimiento
+    (422 si la lista va vacía o referencia establecimientos inexistentes de la
+    org). El POS sincroniza solo los productos del establecimiento de su punto
+    de emisión emparejado (`GET /products?establishmentId=`).
+
+
     Imágenes por referencia al files-service (crm-minio): el front sube vía /files/*
     (presigned, category `product-image`) y registra aquí solo el `fileId`. La respuesta
     expone `imageFileId` (principal, o null) e `images[].fileId`; el front arma la URL
@@ -64,6 +72,7 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
         - { name: type, in: query, schema: { type: string, enum: [good, service] } }
         - { name: categoryId, in: query, schema: { type: string, format: uuid } }
+        - { name: establishmentId, in: query, schema: { type: string, format: uuid }, description: Filtra por el establecimiento asignado (el POS lo usa para sincronizar solo su catálogo) }
       responses:
         '200':
           description: Productos (incluye imageFileId de la principal)
@@ -83,6 +92,9 @@ paths:
         Dinero.js. `taxRateIds` asigna el set inicial de impuestos; el `kind` de cada
         tasa se copia del read-model de tax-service. `priceIncludesTax` indica si el
         precio ya incluye IVA (billing lo usa para calcular base e impuesto correctamente).
+        `establishmentIds` (obligatorio, ≥1) asigna el producto a los establecimientos
+        donde se vende; se valida contra organization-service y el POS solo sincroniza
+        los productos del establecimiento de su punto emparejado.
       x-required-permission: product:create
       parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
       requestBody:
@@ -98,6 +110,7 @@ paths:
                   price: "1299.99"
                   currencyCode: USD
                   sku: DELL-XPS-13
+                  establishmentIds: ["3f1a2b…"]
                   taxRateIds: ["3f1a2b…"]
                   priceIncludesTax: false
                   description: Procesador i7, 16GB RAM, 512GB SSD
@@ -107,6 +120,7 @@ paths:
                   type: service
                   price: "350.00"
                   currencyCode: USD
+                  establishmentIds: ["3f1a2b…"]
                   taxRateIds: ["3f1a2b…"]
       responses:
         '201':
@@ -587,6 +601,10 @@ components:
           type: string
           enum: [weighted_average, fifo]
           description: Estrategia de valorización que inventory-service aplica al calcular el costo de salida.
+        establishmentIds:
+          type: array
+          items: { type: string, format: uuid }
+          description: Establecimientos donde se vende el producto (viven en organization-service). Siempre ≥1.
         taxes:
           type: array
           items: { $ref: '#/components/schemas/ProductTax' }
@@ -630,7 +648,7 @@ components:
     # --- Requests -----------------------------------------------------------
     CreateProductRequest:
       type: object
-      required: [name, type, price, currencyCode]
+      required: [name, type, price, currencyCode, establishmentIds]
       properties:
         name: { type: string, maxLength: 255 }
         type: { type: string, enum: [good, service] }
@@ -640,6 +658,11 @@ components:
         description: { type: string }
         categoryId: { type: string, format: uuid }
         unitId: { type: string, format: uuid }
+        establishmentIds:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+          description: Establecimientos donde se vende (obligatorio, ≥1). Se valida contra organization-service.
         taxRateIds:
           type: array
           items: { type: string, format: uuid }
@@ -665,6 +688,11 @@ components:
         currencyCode: { type: string, minLength: 3, maxLength: 3 }
         categoryId: { type: string, format: uuid, nullable: true }
         unitId: { type: string, format: uuid, nullable: true }
+        establishmentIds:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+          description: Reemplaza el set completo de asignación por establecimiento (≥1).
         priceIncludesTax: { type: boolean }
         trackStock: { type: boolean }
         allowNegativeStock: { type: boolean }

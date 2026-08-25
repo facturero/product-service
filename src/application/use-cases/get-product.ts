@@ -10,9 +10,10 @@ export class GetProductUseCase {
     const product = await this.repos.products.findById(id);
     if (!product || !product.belongsToOrganization(organizationId)) throw new ProductNotFoundError();
 
-    const [taxes, images] = await Promise.all([
+    const [taxes, images, assignments] = await Promise.all([
       this.repos.productTaxes.findByProduct(id),
       this.repos.productImages.listByProduct(id),
+      this.repos.productEstablishments.listByProduct(id),
     ]);
 
     const money = Money.fromCents(product.priceCents, product.currencyCode);
@@ -35,6 +36,7 @@ export class GetProductUseCase {
       trackStock: product.trackStock,
       allowNegativeStock: product.allowNegativeStock,
       valuationMethod: product.valuationMethod,
+      establishmentIds: assignments.map((a) => a.establishmentId),
       taxes: taxes.map((t) => ({ id: t.id, taxRateId: t.taxRateId, kind: t.kind })),
       images: images.map((i) => ({
         id: i.id,

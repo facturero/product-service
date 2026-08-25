@@ -14,6 +14,7 @@ export class ListProductsUseCase {
       status: input.status,
       type: input.type,
       categoryId: input.categoryId,
+      establishmentId: input.establishmentId,
     });
 
     const result: ProductSummaryDTO[] = [];

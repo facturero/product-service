@@ -3,6 +3,7 @@ import { sequelize } from './sequelize.js';
 import {
   CategoryModel,
   OutboxModel,
+  ProductEstablishmentModel,
   ProductImageModel,
   ProductModel,
   ProductTaxModel,
@@ -11,6 +12,7 @@ import {
 import {
   Category,
   Product,
+  ProductEstablishment,
   ProductImage,
   ProductTax,
   Unit,
@@ -20,6 +22,7 @@ import {
   DomainEvent,
   ListProductsFilters,
   OutboxRepository,
+  ProductEstablishmentRepository,
   ProductImageRepository,
   ProductRepository,
   ProductTaxRepository,
@@ -100,6 +103,13 @@ function toProductImage(m: ProductImageModel): ProductImage {
   });
 }
 
+function toProductEstablishment(m: ProductEstablishmentModel): ProductEstablishment {
+  return ProductEstablishment.fromPersistence({
+    productId: m.product_id,
+    establishmentId: m.establishment_id,
+  });
+}
+
 // ── Repositories ────────────────────────────────────────────────────────────
 
 function productRepository(tx?: Transaction): ProductRepository {
@@ -126,8 +136,18 @@ function productRepository(tx?: Transaction): ProductRepository {
           { sku: { [Op.like]: `%${filters.search}%` } },
         ];
       }
+      const include = filters.establishmentId
+        ? [{
+            model: ProductEstablishmentModel,
+            as: 'establishments',
+            where: { establishment_id: filters.establishmentId },
+            required: true,
+            attributes: [],
+          }]
+        : undefined;
       const rows = await ProductModel.findAll({
         where,
+        include,
         transaction: tx,
         order: [['created_at', 'DESC']],
       });
@@ -272,6 +292,39 @@ function productTaxRepository(tx?: Transaction): ProductTaxRepository {
   };
 }
 
+function productEstablishmentRepository(tx?: Transaction): ProductEstablishmentRepository {
+  return {
+    async listByProduct(productId) {
+      const rows = await ProductEstablishmentModel.findAll({
+        where: { product_id: productId },
+        transaction: tx,
+      });
+      return rows.map(toProductEstablishment);
+    },
+    async listProductIdsByEstablishment(establishmentId) {
+      const rows = await ProductEstablishmentModel.findAll({
+        where: { establishment_id: establishmentId },
+        attributes: ['product_id'],
+        transaction: tx,
+      });
+      return rows.map((r) => r.product_id);
+    },
+    async replaceForProduct(productId, establishmentIds) {
+      await ProductEstablishmentModel.destroy({ where: { product_id: productId }, transaction: tx });
+      if (establishmentIds.length > 0) {
+        await ProductEstablishmentModel.bulkCreate(
+          establishmentIds.map((establishmentId) => ({
+            product_id: productId,
+            establishment_id: establishmentId,
+            created_at: new Date(),
+          })),
+          { transaction: tx },
+        );
+      }
+    },
+  };
+}
+
 function productImageRepository(tx?: Transaction): ProductImageRepository {
   return {
     async findById(id) {
@@ -346,6 +399,7 @@ export function buildRepositories(tx: Transaction | undefined, taxRatesOverride:
     categories: categoryRepository(tx),
     units: unitRepository(tx),
     productTaxes: productTaxRepository(tx),
+    productEstablishments: productEstablishmentRepository(tx),
     productImages: productImageRepository(tx),
     taxRates: taxRatesOverride,
     outbox: outboxRepository(tx),

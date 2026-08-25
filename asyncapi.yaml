@@ -16,7 +16,9 @@ info:
 
     Los payloads de precio llevan `priceCents` (BIGINT) + `currencyCode` para que
     billing pueda operar con Dinero.js directamente. Las tasas van como lista completa
-    para que billing actualice su snapshot en una sola operación.
+    para que billing actualice su snapshot en una sola operación. `establishmentIds`
+    informa en qué establecimientos se vende el producto (el gateway lo usa para
+    reenviar `catalog.changed` solo a los POS del establecimiento, si aplica).
 
 
     Patrón Outbox (publicación) + `processed_events` (idempotencia al consumir).
@@ -201,6 +203,13 @@ components:
           type: string
           enum: [weighted_average, fifo]
           description: Estrategia de valorización que inventory-service aplica al calcular el costo de salida.
+        establishmentIds:
+          type: array
+          minItems: 1
+          description: Establecimientos donde se vende el producto (ids de organization-service). Siempre ≥1.
+          items:
+            type: string
+            format: uuid
         taxes:
           type: array
           description: Set completo de impuestos en el momento del evento.

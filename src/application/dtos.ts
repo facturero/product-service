@@ -23,6 +23,7 @@ export interface ProductDetailDTO extends ProductSummaryDTO {
   trackStock: boolean;
   allowNegativeStock: boolean;
   valuationMethod: ValuationMethod;
+  establishmentIds: string[];
   taxes: ProductTaxDTO[];
   images: ProductImageDTO[];
   metadata: Record<string, unknown> | null;
@@ -89,6 +90,7 @@ export interface CreateProductInput {
   description?: string | null;
   categoryId?: string | null;
   unitId?: string | null;
+  establishmentIds: string[];
   taxRateIds?: string[];
   priceIncludesTax?: boolean;
   trackStock?: boolean;
@@ -107,6 +109,7 @@ export interface UpdateProductInput {
   type?: 'good' | 'service';
   categoryId?: string | null;
   unitId?: string | null;
+  establishmentIds?: string[];
   price?: string;
   currencyCode?: string;
   priceIncludesTax?: boolean;
@@ -166,4 +169,5 @@ export interface ListProductsInput {
   status?: string;
   type?: string;
   categoryId?: string;
+  establishmentId?: string;
 }

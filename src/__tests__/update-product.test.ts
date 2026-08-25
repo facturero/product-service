@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { CreateProductUseCase } from '../application/use-cases/create-product.js';
 import { UpdateProductUseCase } from '../application/use-cases/update-product.js';
 import { GetProductUseCase } from '../application/use-cases/get-product.js';
-import { createInMemoryRepositories } from './helpers.js';
-import { ProductNotFoundError } from '../domain/errors.js';
+import { createInMemoryRepositories, InMemoryEstablishmentRepository, uuid } from './helpers.js';
+import { ProductNotFoundError, EstablishmentRequiredError, EstablishmentNotFoundError } from '../domain/errors.js';
 import { UnitOfWork } from '../application/ports.js';
 import { Repositories } from '../domain/repositories.js';
 
@@ -15,8 +15,11 @@ class InMemoryUnitOfWork implements UnitOfWork {
   }
 }
 
+const EST1 = uuid(100);
+const EST2 = uuid(101);
+
 async function createTestProduct(repos: Repositories, uow: UnitOfWork) {
-  const create = new CreateProductUseCase(uow);
+  const create = new CreateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST1, EST2]));
   return create.execute({
     organizationId: 'org-1',
     countryCode: 'EC',
@@ -24,6 +27,7 @@ async function createTestProduct(repos: Repositories, uow: UnitOfWork) {
     type: 'good',
     price: '10.00',
     currencyCode: 'USD',
+    establishmentIds: [EST1],
   });
 }
 
@@ -33,7 +37,7 @@ describe('UpdateProductUseCase', () => {
     const uow = new InMemoryUnitOfWork(repos);
     const product = await createTestProduct(repos, uow);
 
-    const useCase = new UpdateProductUseCase(uow);
+    const useCase = new UpdateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST1, EST2]));
     const result = await useCase.execute({
       organizationId: 'org-1',
       id: product.id,
@@ -44,6 +48,7 @@ describe('UpdateProductUseCase', () => {
 
     expect(result.price).toBe('0.00');
     expect(result.priceCents).toBe(0);
+    expect(result.establishmentIds).toEqual([EST1]);
   });
 
   it('actualiza solo el nombre sin afectar otros campos', async () => {
@@ -51,7 +56,7 @@ describe('UpdateProductUseCase', () => {
     const uow = new InMemoryUnitOfWork(repos);
     const product = await createTestProduct(repos, uow);
 
-    const useCase = new UpdateProductUseCase(uow);
+    const useCase = new UpdateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST1, EST2]));
     const result = await useCase.execute({
       organizationId: 'org-1',
       id: product.id,
@@ -64,10 +69,55 @@ describe('UpdateProductUseCase', () => {
     expect(result.type).toBe('good');
   });
 
+  it('reemplaza la asignación de establecimientos', async () => {
+    const repos = createInMemoryRepositories();
+    const uow = new InMemoryUnitOfWork(repos);
+    const product = await createTestProduct(repos, uow);
+
+    const useCase = new UpdateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST1, EST2]));
+    const result = await useCase.execute({
+      organizationId: 'org-1',
+      id: product.id,
+      countryCode: 'EC',
+      establishmentIds: [EST2],
+    });
+
+    expect(result.establishmentIds).toEqual([EST2]);
+    expect(await repos.productEstablishments.listByProduct(product.id)).toHaveLength(1);
+  });
+
+  it('lanza EstablishmentRequiredError si se envía la lista vacía', async () => {
+    const repos = createInMemoryRepositories();
+    const uow = new InMemoryUnitOfWork(repos);
+    const product = await createTestProduct(repos, uow);
+
+    const useCase = new UpdateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST1, EST2]));
+    await expect(useCase.execute({
+      organizationId: 'org-1',
+      id: product.id,
+      countryCode: 'EC',
+      establishmentIds: [],
+    })).rejects.toThrow(EstablishmentRequiredError);
+  });
+
+  it('lanza EstablishmentNotFoundError si el establecimiento no existe', async () => {
+    const repos = createInMemoryRepositories();
+    const uow = new InMemoryUnitOfWork(repos);
+    const product = await createTestProduct(repos, uow);
+
+    const useCase = new UpdateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST1, EST2]));
+    await expect(useCase.execute({
+      organizationId: 'org-1',
+      id: product.id,
+      countryCode: 'EC',
+      establishmentIds: [uuid(999)],
+    })).rejects.toThrow(EstablishmentNotFoundError);
+  });
+
   it('lanza ProductNotFoundError si el producto no existe', async () => {
     const repos = createInMemoryRepositories();
     const uow = new InMemoryUnitOfWork(repos);
-    const useCase = new UpdateProductUseCase(uow);
+    const useCase = new UpdateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST1, EST2]));
 
     await expect(useCase.execute({
       organizationId: 'org-1',
@@ -82,7 +132,7 @@ describe('UpdateProductUseCase', () => {
     const uow = new InMemoryUnitOfWork(repos);
     const product = await createTestProduct(repos, uow);
 
-    const useCase = new UpdateProductUseCase(uow);
+    const useCase = new UpdateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST1, EST2]));
     await useCase.execute({
       organizationId: 'org-1',
       id: product.id,

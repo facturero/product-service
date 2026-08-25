@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { Money } from '../../domain/value-objects.js';
-import { ProductNotFoundError, SkuAlreadyExistsError } from '../../domain/errors.js';
-import { UnitOfWork } from '../ports.js';
+import { EstablishmentNotFoundError, EstablishmentRequiredError, ProductNotFoundError, SkuAlreadyExistsError } from '../../domain/errors.js';
+import { UnitOfWork, EstablishmentRepository } from '../ports.js';
 import { ProductDetailDTO, UpdateProductInput } from '../dtos.js';
 
 export class UpdateProductUseCase {
-  constructor(private readonly uow: UnitOfWork) {}
+  constructor(
+    private readonly uow: UnitOfWork,
+    private readonly establishments: EstablishmentRepository,
+  ) {}
 
   async execute(input: UpdateProductInput): Promise<ProductDetailDTO> {
     return this.uow.execute(async (repos) => {
@@ -15,6 +18,16 @@ export class UpdateProductUseCase {
       if (input.sku !== undefined && input.sku !== product.sku) {
         const existing = await repos.products.findBySku(input.organizationId, input.sku ?? '');
         if (existing && existing.id !== input.id) throw new SkuAlreadyExistsError();
+      }
+
+      let establishmentIds: string[] | undefined;
+      if (input.establishmentIds !== undefined) {
+        establishmentIds = await this.validateEstablishments(input.organizationId, input.establishmentIds);
+        await repos.productEstablishments.replaceForProduct(product.id, establishmentIds);
+      } else {
+        establishmentIds = (await repos.productEstablishments.listByProduct(product.id)).map(
+          (pe) => pe.establishmentId,
+        );
       }
 
       product.updateDetails({
@@ -62,6 +75,7 @@ export class UpdateProductUseCase {
           trackStock: product.trackStock,
           allowNegativeStock: product.allowNegativeStock,
           valuationMethod: product.valuationMethod,
+          establishmentIds,
           taxes: taxes.map((t) => ({ taxRateId: t.taxRateId, kind: t.kind })),
           imageFileId: primaryImage?.fileId ?? null,
           status: product.status,
@@ -86,6 +100,7 @@ export class UpdateProductUseCase {
         trackStock: product.trackStock,
         allowNegativeStock: product.allowNegativeStock,
         valuationMethod: product.valuationMethod,
+        establishmentIds,
         taxes: taxes.map((t) => ({ id: t.id, taxRateId: t.taxRateId, kind: t.kind })),
         images: images.map((i) => ({
           id: i.id,
@@ -101,5 +116,18 @@ export class UpdateProductUseCase {
         updatedAt: product.updatedAt.toISOString(),
       };
     });
+  }
+
+  private async validateEstablishments(organizationId: string, establishmentIds: string[]): Promise<string[]> {
+    if (!establishmentIds || establishmentIds.length === 0) {
+      throw new EstablishmentRequiredError();
+    }
+    const unique = [...new Set(establishmentIds)];
+    const orgEstablishments = await this.establishments.listByOrganization(organizationId);
+    const validIds = new Set(orgEstablishments.map((e) => e.id));
+    for (const id of unique) {
+      if (!validIds.has(id)) throw new EstablishmentNotFoundError();
+    }
+    return unique;
   }
 }

@@ -12,6 +12,7 @@ const schema = z.object({
   RABBITMQ_URL: z.string().optional(),
   CORS_ORIGIN: z.string().default('*'),
   TAX_SERVICE_URL: z.string().default('http://tax-service:3005'),
+  ORG_SERVICE_URL: z.string().default('http://organization-service:3002'),
   INTERNAL_USER_ID: z.string().default('00000000-0000-0000-0000-000000000000'),
 });
 
@@ -38,6 +39,7 @@ export interface AppConfig {
   RABBITMQ_URL: string | undefined;
   CORS_ORIGIN: string;
   TAX_SERVICE_URL: string;
+  ORG_SERVICE_URL: string;
   INTERNAL_USER_ID: string;
 }
 
@@ -52,5 +54,6 @@ export const config: AppConfig = {
   RABBITMQ_URL: env.RABBITMQ_URL,
   CORS_ORIGIN: env.CORS_ORIGIN,
   TAX_SERVICE_URL: env.TAX_SERVICE_URL,
+  ORG_SERVICE_URL: env.ORG_SERVICE_URL,
   INTERNAL_USER_ID: env.INTERNAL_USER_ID,
 };

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CreateProductUseCase } from '../application/use-cases/create-product.js';
 import { DisableProductUseCase } from '../application/use-cases/disable-product.js';
 import { GetProductUseCase } from '../application/use-cases/get-product.js';
-import { createInMemoryRepositories } from './helpers.js';
+import { createInMemoryRepositories, InMemoryEstablishmentRepository, uuid } from './helpers.js';
 import { ProductNotFoundError } from '../domain/errors.js';
 import { UnitOfWork } from '../application/ports.js';
 import { Repositories } from '../domain/repositories.js';
@@ -15,8 +15,10 @@ class InMemoryUnitOfWork implements UnitOfWork {
   }
 }
 
+const EST = uuid(100);
+
 async function createTestProduct(repos: Repositories, uow: UnitOfWork) {
-  const create = new CreateProductUseCase(uow);
+  const create = new CreateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST]));
   return create.execute({
     organizationId: 'org-1',
     countryCode: 'EC',
@@ -24,6 +26,7 @@ async function createTestProduct(repos: Repositories, uow: UnitOfWork) {
     type: 'good',
     price: '10.00',
     currencyCode: 'USD',
+    establishmentIds: [EST],
   });
 }
 

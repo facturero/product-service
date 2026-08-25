@@ -1,4 +1,4 @@
-import { Category, Product, ProductImage, ProductTax, TaxRate, Unit } from './entities.js';
+import { Category, Product, ProductEstablishment, ProductImage, ProductTax, TaxRate, Unit } from './entities.js';
 
 export interface DomainEvent {
   eventId: string;
@@ -15,6 +15,7 @@ export interface ListProductsFilters {
   status?: string;
   type?: string;
   categoryId?: string;
+  establishmentId?: string;
 }
 
 export interface ProductRepository {
@@ -46,6 +47,12 @@ export interface ProductTaxRepository {
   deleteByProduct(productId: string): Promise<void>;
 }
 
+export interface ProductEstablishmentRepository {
+  listByProduct(productId: string): Promise<ProductEstablishment[]>;
+  listProductIdsByEstablishment(establishmentId: string): Promise<string[]>;
+  replaceForProduct(productId: string, establishmentIds: string[]): Promise<void>;
+}
+
 export interface ProductImageRepository {
   findById(id: string): Promise<ProductImage | null>;
   listByProduct(productId: string): Promise<ProductImage[]>;
@@ -71,6 +78,7 @@ export interface Repositories {
   categories: CategoryRepository;
   units: UnitRepository;
   productTaxes: ProductTaxRepository;
+  productEstablishments: ProductEstablishmentRepository;
   productImages: ProductImageRepository;
   taxRates: TaxRateReadModelRepository;
   outbox: OutboxRepository;

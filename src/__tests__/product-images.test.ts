@@ -4,7 +4,7 @@ import { RemoveProductImageUseCase } from '../application/use-cases/remove-produ
 import { SetPrimaryImageUseCase } from '../application/use-cases/set-primary-image.js';
 import { ListImagesUseCase } from '../application/use-cases/list-images.js';
 import { CreateProductUseCase } from '../application/use-cases/create-product.js';
-import { createInMemoryRepositories } from './helpers.js';
+import { createInMemoryRepositories, InMemoryEstablishmentRepository, uuid } from './helpers.js';
 import { UnitOfWork } from '../application/ports.js';
 import { Repositories } from '../domain/repositories.js';
 
@@ -16,8 +16,10 @@ class InMemoryUnitOfWork implements UnitOfWork {
   }
 }
 
+const EST = uuid(100);
+
 async function createTestProduct(repos: Repositories, uow: UnitOfWork) {
-  const create = new CreateProductUseCase(uow);
+  const create = new CreateProductUseCase(uow, new InMemoryEstablishmentRepository().with([EST]));
   return create.execute({
     organizationId: 'org-1',
     countryCode: 'EC',
@@ -25,6 +27,7 @@ async function createTestProduct(repos: Repositories, uow: UnitOfWork) {
     type: 'good',
     price: '10.00',
     currencyCode: 'USD',
+    establishmentIds: [EST],
   });
 }
 

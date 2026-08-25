@@ -49,6 +49,8 @@ export class UpdateProductTaxesUseCase {
 
       const taxes = await repos.productTaxes.findByProduct(input.productId);
       const images = await repos.productImages.listByProduct(input.productId);
+      const assignments = await repos.productEstablishments.listByProduct(input.productId);
+      const establishmentIds = assignments.map((pe) => pe.establishmentId);
       const primaryImage = images.find((i) => i.isPrimary);
       const money = Money.fromCents(product.priceCents, product.currencyCode);
 
@@ -70,6 +72,7 @@ export class UpdateProductTaxesUseCase {
           trackStock: product.trackStock,
           allowNegativeStock: product.allowNegativeStock,
           valuationMethod: product.valuationMethod,
+          establishmentIds,
           taxes: taxes.map((t) => ({ taxRateId: t.taxRateId, kind: t.kind })),
           imageFileId: primaryImage?.fileId ?? null,
           status: product.status,
@@ -94,6 +97,7 @@ export class UpdateProductTaxesUseCase {
         trackStock: product.trackStock,
         allowNegativeStock: product.allowNegativeStock,
         valuationMethod: product.valuationMethod,
+        establishmentIds,
         taxes: taxes.map((t) => ({ id: t.id, taxRateId: t.taxRateId, kind: t.kind })),
         images: images.map((i) => ({
           id: i.id,

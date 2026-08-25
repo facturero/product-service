@@ -1,10 +1,11 @@
-import { Category, Product, ProductImage, ProductTax, TaxKind, Unit } from '../domain/entities.js';
-import { DomainEvent, Repositories, ProductRepository, CategoryRepository, UnitRepository, ProductTaxRepository, ProductImageRepository, TaxRateReadModelRepository, OutboxRepository } from '../domain/repositories.js';
+import { Category, Product, ProductEstablishment, ProductImage, ProductTax, TaxKind, Unit } from '../domain/entities.js';
+import { DomainEvent, Repositories, ProductRepository, CategoryRepository, UnitRepository, ProductTaxRepository, ProductEstablishmentRepository, ProductImageRepository, TaxRateReadModelRepository, OutboxRepository } from '../domain/repositories.js';
 
 // ── In-memory repositories ──────────────────────────────────────────────────
 
 export class InMemoryProductRepository implements ProductRepository {
   items: Product[] = [];
+  establishmentsRef: InMemoryProductEstablishmentRepository | null = null;
 
   async findById(id: string): Promise<Product | null> {
     return this.items.find((p) => p.id === id) ?? null;
@@ -14,7 +15,7 @@ export class InMemoryProductRepository implements ProductRepository {
     return this.items.find((p) => p.organizationId === organizationId && p.sku === sku) ?? null;
   }
 
-  async list(organizationId: string, filters: { search?: string; status?: string; type?: string; categoryId?: string }): Promise<Product[]> {
+  async list(organizationId: string, filters: { search?: string; status?: string; type?: string; categoryId?: string; establishmentId?: string }): Promise<Product[]> {
     let result = this.items.filter((p) => p.organizationId === organizationId);
     if (filters.status) result = result.filter((p) => p.status === filters.status);
     if (filters.type) result = result.filter((p) => p.type === filters.type);
@@ -22,6 +23,14 @@ export class InMemoryProductRepository implements ProductRepository {
     if (filters.search) {
       const s = filters.search.toLowerCase();
       result = result.filter((p) => p.name.toLowerCase().includes(s) || (p.sku && p.sku.toLowerCase().includes(s)));
+    }
+    if (filters.establishmentId && this.establishmentsRef) {
+      const ids = new Set(
+        this.establishmentsRef.items
+          .filter((e) => e.establishmentId === filters.establishmentId)
+          .map((e) => e.productId),
+      );
+      result = result.filter((p) => ids.has(p.id));
     }
     return result;
   }
@@ -103,6 +112,25 @@ export class InMemoryProductTaxRepository implements ProductTaxRepository {
   }
 }
 
+export class InMemoryProductEstablishmentRepository implements ProductEstablishmentRepository {
+  items: ProductEstablishment[] = [];
+
+  async listByProduct(productId: string): Promise<ProductEstablishment[]> {
+    return this.items.filter((e) => e.productId === productId);
+  }
+
+  async listProductIdsByEstablishment(establishmentId: string): Promise<string[]> {
+    return this.items.filter((e) => e.establishmentId === establishmentId).map((e) => e.productId);
+  }
+
+  async replaceForProduct(productId: string, establishmentIds: string[]): Promise<void> {
+    this.items = this.items.filter((e) => e.productId !== productId);
+    for (const establishmentId of establishmentIds) {
+      this.items.push(ProductEstablishment.create({ productId, establishmentId }));
+    }
+  }
+}
+
 export class InMemoryProductImageRepository implements ProductImageRepository {
   items: ProductImage[] = [];
 
@@ -172,16 +200,43 @@ export function createInMemoryRepositories(): Repositories {
   const categories = new InMemoryCategoryRepository();
   const units = new InMemoryUnitRepository();
   const productTaxes = new InMemoryProductTaxRepository();
+  const productEstablishments = new InMemoryProductEstablishmentRepository();
   const productImages = new InMemoryProductImageRepository();
   const taxRates = new InMemoryTaxRateReadModelRepository();
   categories.productsRef = products;
+  products.establishmentsRef = productEstablishments;
   return {
     products,
     categories,
     units,
     productTaxes,
+    productEstablishments,
     productImages,
     taxRates,
     outbox: new InMemoryOutboxRepository(),
   };
+}
+
+// Read-model in-memory de organization-service: establecimientos válidos de la
+// organización para los tests de los use cases de producto.
+export class InMemoryEstablishmentRepository {
+  establishments: { id: string; code: string; status: 'active' | 'inactive' }[] = [];
+
+  async listByOrganization(_organizationId: string) {
+    return [...this.establishments];
+  }
+
+  with(ids: string[]): this {
+    this.establishments = ids.map((id, i) => ({
+      id,
+      code: String(i + 1).padStart(3, '0'),
+      status: 'active',
+    }));
+    return this;
+  }
+}
+
+export function uuid(seed = 0): string {
+  const hex = seed.toString(16).padStart(12, '0');
+  return `00000000-0000-4000-8000-${hex}`;
 }

@@ -34,6 +34,7 @@ export function createProductController(useCase: CreateProductUseCase) {
       description?: string;
       categoryId?: string;
       unitId?: string;
+      establishmentIds: string[];
       taxRateIds?: string[];
       priceIncludesTax?: boolean;
       metadata?: Record<string, unknown>;
@@ -49,6 +50,7 @@ export function createProductController(useCase: CreateProductUseCase) {
       description: body.description,
       categoryId: body.categoryId,
       unitId: body.unitId,
+      establishmentIds: body.establishmentIds,
       taxRateIds: body.taxRateIds,
       priceIncludesTax: body.priceIncludesTax,
       metadata: body.metadata,
@@ -64,7 +66,8 @@ export function listProductsController(useCase: ListProductsUseCase) {
     const status = c.req.query('status');
     const type = c.req.query('type');
     const categoryId = c.req.query('categoryId');
-    const result = await useCase.execute({ organizationId, search, status, type, categoryId });
+    const establishmentId = c.req.query('establishmentId');
+    const result = await useCase.execute({ organizationId, search, status, type, categoryId, establishmentId });
     return c.json(result, 200);
   };
 }
@@ -90,6 +93,7 @@ export function updateProductController(useCase: UpdateProductUseCase) {
       type?: 'good' | 'service';
       categoryId?: string | null;
       unitId?: string | null;
+      establishmentIds?: string[];
       price?: string;
       currencyCode?: string;
       priceIncludesTax?: boolean;
@@ -106,6 +110,7 @@ export function updateProductController(useCase: UpdateProductUseCase) {
       type: body.type,
       categoryId: body.categoryId,
       unitId: body.unitId,
+      establishmentIds: body.establishmentIds,
       price: body.price,
       currencyCode: body.currencyCode,
       priceIncludesTax: body.priceIncludesTax,

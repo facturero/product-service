@@ -5,6 +5,7 @@ import { sequelize } from './infrastructure/persistence/sequelize.js';
 import './infrastructure/persistence/models.js';
 import { buildRepositories, SequelizeUnitOfWork } from './infrastructure/persistence/repositories.js';
 import { TaxRateHttpRepository } from './infrastructure/http/tax-rate-http-repository.js';
+import { EstablishmentHttpRepository } from './infrastructure/http/establishment-http-repository.js';
 import { CreateProductUseCase } from './application/use-cases/create-product.js';
 import { GetProductUseCase } from './application/use-cases/get-product.js';
 import { ListProductsUseCase } from './application/use-cases/list-products.js';
@@ -31,6 +32,7 @@ async function main(): Promise<void> {
   await sequelize.sync();
 
   const taxRateRepo = new TaxRateHttpRepository(config.TAX_SERVICE_URL, config.INTERNAL_USER_ID);
+  const establishmentRepo = new EstablishmentHttpRepository(config.ORG_SERVICE_URL, config.INTERNAL_USER_ID);
   const repos = buildRepositories(undefined, taxRateRepo);
   const uow = new SequelizeUnitOfWork(taxRateRepo);
 
@@ -38,10 +40,10 @@ async function main(): Promise<void> {
 
   const app = createApp({
     useCases: {
-      createProduct: new CreateProductUseCase(uow),
+      createProduct: new CreateProductUseCase(uow, establishmentRepo),
       listProducts: new ListProductsUseCase(repos.products, repos.productImages),
       getProduct: getProductUseCase,
-      updateProduct: new UpdateProductUseCase(uow),
+      updateProduct: new UpdateProductUseCase(uow, establishmentRepo),
       disableProduct: new DisableProductUseCase(uow),
       updateProductTaxes: new UpdateProductTaxesUseCase(uow),
       addProductImage: new AddProductImageUseCase(uow),

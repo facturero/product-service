@@ -60,6 +60,18 @@ export class UnitNotFoundError extends AppError {
   constructor(message = 'Unidad no encontrada.') { super(message); }
 }
 
+export class EstablishmentRequiredError extends AppError {
+  readonly code = 'ESTABLISHMENT_REQUIRED';
+  readonly httpStatus = 422;
+  constructor(message = 'Debe asignar al menos un establecimiento al producto.') { super(message); }
+}
+
+export class EstablishmentNotFoundError extends AppError {
+  readonly code = 'ESTABLISHMENT_NOT_FOUND';
+  readonly httpStatus = 422;
+  constructor(message = 'Uno o más establecimientos asignados no existen o no pertenecen a la organización.') { super(message); }
+}
+
 export class TaxRateNotFoundError extends AppError {
   readonly code = 'TAX_RATE_NOT_FOUND';
   readonly httpStatus = 422;

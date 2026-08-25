@@ -121,6 +121,28 @@ ProductTaxModel.init(
   { sequelize, tableName: 'product_taxes', timestamps: false },
 );
 
+export class ProductEstablishmentModel extends Model<
+  InferAttributes<ProductEstablishmentModel>,
+  InferCreationAttributes<ProductEstablishmentModel>
+> {
+  declare product_id: string;
+  declare establishment_id: string;
+  declare created_at: Date;
+}
+
+ProductEstablishmentModel.init(
+  {
+    product_id: { type: DataTypes.CHAR(36), allowNull: false, primaryKey: true },
+    establishment_id: { type: DataTypes.CHAR(36), allowNull: false, primaryKey: true },
+    created_at: { type: DataTypes.DATE, allowNull: false },
+  },
+  {
+    sequelize,
+    tableName: 'product_establishments',
+    timestamps: false,
+  },
+);
+
 export class ProductImageModel extends Model<
   InferAttributes<ProductImageModel>,
   InferCreationAttributes<ProductImageModel>
@@ -200,6 +222,9 @@ UnitModel.hasMany(ProductModel, { foreignKey: 'unit_id', as: 'products' });
 
 ProductModel.hasMany(ProductTaxModel, { foreignKey: 'product_id', as: 'taxes' });
 ProductTaxModel.belongsTo(ProductModel, { foreignKey: 'product_id' });
+
+ProductModel.hasMany(ProductEstablishmentModel, { foreignKey: 'product_id', as: 'establishments' });
+ProductEstablishmentModel.belongsTo(ProductModel, { foreignKey: 'product_id' });
 
 ProductModel.hasMany(ProductImageModel, { foreignKey: 'product_id', as: 'images' });
 ProductImageModel.belongsTo(ProductModel, { foreignKey: 'product_id' });

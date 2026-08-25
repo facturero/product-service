@@ -298,6 +298,35 @@ export class ProductTax {
   }
 }
 
+// ── ProductEstablishment ────────────────────────────────────────────────────
+
+export interface ProductEstablishmentProps {
+  productId: string;
+  establishmentId: string;
+}
+
+export class ProductEstablishment {
+  private constructor(private props: ProductEstablishmentProps) {}
+
+  static create(params: { productId: string; establishmentId: string }): ProductEstablishment {
+    return new ProductEstablishment({
+      productId: params.productId,
+      establishmentId: params.establishmentId,
+    });
+  }
+
+  static fromPersistence(props: ProductEstablishmentProps): ProductEstablishment {
+    return new ProductEstablishment({ ...props });
+  }
+
+  get productId(): string { return this.props.productId; }
+  get establishmentId(): string { return this.props.establishmentId; }
+
+  toPersistence(): ProductEstablishmentProps {
+    return { ...this.props };
+  }
+}
+
 // ── ProductImage ────────────────────────────────────────────────────────────
 
 export interface ProductImageProps {
