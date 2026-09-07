@@ -66,8 +66,13 @@ export const updateUnitSchema = z.object({
 export const addImageSchema = z.object({
   fileId: z.string().uuid('El fileId no es válido.'),
   alt: z.string().max(255).optional(),
-  position: z.number().int().default(0),
-  isPrimary: z.boolean().default(false),
+  // Sin valor por defecto a propósito: AddProductImageUseCase decide isPrimary
+  // (primera imagen del producto) y position (siguiente por orden) cuando el
+  // cliente no los manda — un .default() aquí convertía "no lo mandé" en un
+  // false/0 explícito, apagando ese fallback (input.isPrimary ?? isFirst nunca
+  // ve undefined) y dejando SIEMPRE isPrimary:false y position:0.
+  position: z.number().int().optional(),
+  isPrimary: z.boolean().optional(),
 });
 
 export function validateJson<T extends ZodSchema>(schema: T) {
