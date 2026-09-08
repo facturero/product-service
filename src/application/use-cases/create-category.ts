@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Category } from '../../domain/entities.js';
 import { CategoryNameExistsError } from '../../domain/errors.js';
 import { Repositories } from '../../domain/repositories.js';
@@ -18,6 +19,22 @@ export class CreateCategoryUseCase {
     });
 
     await this.repos.categories.save(category);
+
+    // Catálogo de la organización: crear/editar/borrar una categoría o unidad
+    // cambia cómo se clasifican los productos y tiene que quedar auditado.
+    await this.repos.outbox.add({
+      eventId: randomUUID(),
+      organizationId: category.organizationId,
+      type: 'product.category.created',
+      aggregateType: 'category',
+      aggregateId: category.id,
+      payload: {
+        organizationId: category.organizationId,
+        categoryId: category.id,
+        name: category.name,
+      },
+      occurredAt: new Date(),
+    });
 
     return {
       id: category.id,

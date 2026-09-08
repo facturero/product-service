@@ -1,4 +1,5 @@
 import { Context, MiddlewareHandler } from 'hono';
+import { runWithActor } from '@facturero/outbox-relay';
 import {
   AppError,
   ForbiddenError,
@@ -27,7 +28,18 @@ export function contextMiddleware(): MiddlewareHandler<{
     if (countryCode) c.set('countryCode', countryCode);
     if (perms) c.set('permissions', perms.split(',').map((p) => p.trim()));
 
-    await next();
+    // Quien actúa viaja en un contexto asíncrono hasta el outbox: así CADA
+    // evento publicado durante esta petición lleva actor/ip/request-id sin que
+    // los casos de uso tengan que arrastrarlos uno a uno. Ver `withActor`.
+    await runWithActor(
+      {
+        actorId: userId ?? null,
+        actorEmail: c.req.header('X-User-Email') ?? null,
+        actorIp: c.req.header('X-Client-Ip') ?? null,
+        requestId: c.req.header('X-Request-Id') ?? null,
+      },
+      () => next(),
+    );
   };
 }
 

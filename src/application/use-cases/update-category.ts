@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { CategoryNotFoundError, CategoryNameExistsError } from '../../domain/errors.js';
 import { Repositories } from '../../domain/repositories.js';
 import { CategoryDTO, UpdateCategoryInput } from '../dtos.js';
@@ -21,6 +22,23 @@ export class UpdateCategoryUseCase {
     });
 
     await this.repos.categories.save(category);
+
+    // Catálogo de la organización: crear/editar/borrar una categoría o unidad
+    // cambia cómo se clasifican los productos y tiene que quedar auditado.
+    await this.repos.outbox.add({
+      eventId: randomUUID(),
+      organizationId: category.organizationId,
+      type: 'product.category.updated',
+      aggregateType: 'category',
+      aggregateId: category.id,
+      payload: {
+        organizationId: category.organizationId,
+        categoryId: category.id,
+        name: category.name,
+        status: category.status,
+      },
+      occurredAt: new Date(),
+    });
 
     return {
       id: category.id,
