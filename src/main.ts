@@ -34,7 +34,8 @@ async function main(): Promise<void> {
   const taxRateRepo = new TaxRateHttpRepository(config.TAX_SERVICE_URL, config.INTERNAL_USER_ID);
   const establishmentRepo = new EstablishmentHttpRepository(config.ORG_SERVICE_URL, config.INTERNAL_USER_ID);
   const repos = buildRepositories(undefined, taxRateRepo);
-  const uow = new SequelizeUnitOfWork(taxRateRepo);
+  let relay: OutboxRelay | undefined;
+  const uow = new SequelizeUnitOfWork(taxRateRepo, (tx) => relay?.attachToTransaction(tx));
 
   const getProductUseCase = new GetProductUseCase(repos);
 
@@ -68,7 +69,7 @@ async function main(): Promise<void> {
   // Relay del outbox a RabbitMQ: publica product.product.* para que el
   // gateway lo reenvíe en tiempo real a los POS conectados.
   if (config.RABBITMQ_URL) {
-    const relay = new OutboxRelay({
+    relay = new OutboxRelay({
       sequelize,
       rabbitmqUrl: config.RABBITMQ_URL,
       exchange: 'crm.events',

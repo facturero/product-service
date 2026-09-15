@@ -411,9 +411,17 @@ export function buildRepositories(tx: Transaction | undefined, taxRatesOverride:
 }
 
 export class SequelizeUnitOfWork implements UnitOfWork {
-  constructor(private readonly taxRatesOverride: TaxRateReadModelRepository) {}
+  constructor(
+    private readonly taxRatesOverride: TaxRateReadModelRepository,
+    private readonly onCommit?: (tx: Transaction) => void,
+  ) {}
 
   async execute<T>(work: (repos: Repositories) => Promise<T>): Promise<T> {
-    return sequelize.transaction(async (tx) => work(buildRepositories(tx, this.taxRatesOverride)));
+    return sequelize.transaction(async (tx) => {
+      // El relay publica el outbox justo tras el commit; sin este enganche los
+      // eventos esperan los 30s del timer de respaldo del relay.
+      this.onCommit?.(tx);
+      return work(buildRepositories(tx, this.taxRatesOverride));
+    });
   }
 }
