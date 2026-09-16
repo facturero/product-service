@@ -16,12 +16,19 @@ export interface ListProductsFilters {
   type?: string;
   categoryId?: string;
   establishmentId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListPage<T> {
+  items: T[];
+  total: number;
 }
 
 export interface ProductRepository {
   findById(id: string): Promise<Product | null>;
   findBySku(organizationId: string, sku: string): Promise<Product | null>;
-  list(organizationId: string, filters: ListProductsFilters): Promise<Product[]>;
+  list(organizationId: string, filters: ListProductsFilters): Promise<ListPage<Product>>;
   save(product: Product): Promise<void>;
 }
 
@@ -60,6 +67,7 @@ export interface ProductImageRepository {
   delete(id: string): Promise<void>;
   clearPrimary(productId: string): Promise<void>;
   findPrimary(productId: string): Promise<ProductImage | null>;
+  findPrimariesByProductIds(productIds: string[]): Promise<Map<string, ProductImage>>;
 }
 
 export interface TaxRateReadModelRepository {

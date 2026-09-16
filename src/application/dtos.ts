@@ -170,4 +170,13 @@ export interface ListProductsInput {
   type?: string;
   categoryId?: string;
   establishmentId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ProductListDTO {
+  items: ProductSummaryDTO[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

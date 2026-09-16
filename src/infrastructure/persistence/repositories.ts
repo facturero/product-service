@@ -150,9 +150,12 @@ function productRepository(tx?: Transaction): ProductRepository {
         where,
         include,
         transaction: tx,
-        order: [['created_at', 'DESC']],
+        order: [['created_at', 'DESC'], ['id', 'DESC']],
+        limit: filters.limit,
+        offset: filters.offset,
       });
-      return rows.map(toProduct);
+      const total = await ProductModel.count({ where, include, transaction: tx });
+      return { items: rows.map(toProduct), total };
     },
     async save(product) {
       const p = product.toPersistence();
@@ -311,10 +314,27 @@ function productEstablishmentRepository(tx?: Transaction): ProductEstablishmentR
       return rows.map((r) => r.product_id);
     },
     async replaceForProduct(productId, establishmentIds) {
-      await ProductEstablishmentModel.destroy({ where: { product_id: productId }, transaction: tx });
-      if (establishmentIds.length > 0) {
+      // Diff mínimo en vez de destroy+bulkCreate totales: tocar solo las filas
+      // que cambian reduce la superficie de gap-locks sobre el índice de
+      // establishment_id, principal fuente de ER_LOCK_DEADLOCK bajo concurrencia.
+      const current = await ProductEstablishmentModel.findAll({
+        where: { product_id: productId },
+        attributes: ['establishment_id'],
+        transaction: tx,
+      });
+      const currentSet = new Set(current.map((r) => r.establishment_id));
+      const targetSet = new Set(establishmentIds);
+      const toDelete = [...currentSet].filter((id) => !targetSet.has(id));
+      const toAdd = establishmentIds.filter((id) => !currentSet.has(id));
+      if (toDelete.length > 0) {
+        await ProductEstablishmentModel.destroy({
+          where: { product_id: productId, establishment_id: { [Op.in]: toDelete } },
+          transaction: tx,
+        });
+      }
+      if (toAdd.length > 0) {
         await ProductEstablishmentModel.bulkCreate(
-          establishmentIds.map((establishmentId) => ({
+          toAdd.map((establishmentId) => ({
             product_id: productId,
             establishment_id: establishmentId,
             created_at: new Date(),
@@ -372,6 +392,21 @@ function productImageRepository(tx?: Transaction): ProductImageRepository {
       });
       return m ? toProductImage(m) : null;
     },
+    async findPrimariesByProductIds(productIds) {
+      // Carga la imagen primaria de N productos con UNA query (el listado de
+      // productos resolvía antes una query por producto → N+1).
+      if (productIds.length === 0) return new Map<string, ProductImage>();
+      const rows = await ProductImageModel.findAll({
+        where: { product_id: { [Op.in]: productIds }, is_primary: true },
+        transaction: tx,
+      });
+      const result = new Map<string, ProductImage>();
+      for (const row of rows) {
+        const img = toProductImage(row);
+        if (!result.has(img.productId)) result.set(img.productId, img);
+      }
+      return result;
+    },
   };
 }
 
@@ -417,11 +452,43 @@ export class SequelizeUnitOfWork implements UnitOfWork {
   ) {}
 
   async execute<T>(work: (repos: Repositories) => Promise<T>): Promise<T> {
-    return sequelize.transaction(async (tx) => {
-      // El relay publica el outbox justo tras el commit; sin este enganche los
-      // eventos esperan los 30s del timer de respaldo del relay.
-      this.onCommit?.(tx);
-      return work(buildRepositories(tx, this.taxRatesOverride));
-    });
+    // Los deadlocks de InnoDB (1213) y lock-wait-timeout (1205) son retryables
+    // por diseño: InnoDB elige y mata a una víctima en cada ciclo. Reintentar
+    // la transacción completa absorbe el choque en vez de devolver un 500.
+    // El hook onCommit usa tx.afterCommit, así que un reintento fallido no
+    // publica nada: el outbox sale solo en el commit que prospera.
+    return withTransactionRetry(5, () =>
+      sequelize.transaction(
+        { isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED },
+        async (tx) => {
+          this.onCommit?.(tx);
+          return work(buildRepositories(tx, this.taxRatesOverride));
+        },
+      ),
+    );
   }
+}
+
+const RETRYABLE_CODES = new Set(['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT']);
+
+function isRetryableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const parent = (error as Error & { parent?: { code?: string } }).parent;
+  const code = parent?.code ?? (error as Error & { code?: string }).code;
+  return typeof code === 'string' && RETRYABLE_CODES.has(code);
+}
+
+async function withTransactionRetry<T>(attempts: number, fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt === attempts || !isRetryableError(error)) throw error;
+      // Backoff corto con jitter: evita que los reintentos de transacciones
+      // concurrentes que chocaron por el mismo gap-lock se re-sincronicen.
+      const delay = 25 + Math.floor(Math.random() * 50) * attempt;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('withTransactionRetry: attempts must be >= 1');
 }

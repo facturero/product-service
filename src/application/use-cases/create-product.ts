@@ -155,7 +155,7 @@ export class CreateProductUseCase {
     if (!establishmentIds || establishmentIds.length === 0) {
       throw new EstablishmentRequiredError();
     }
-    const unique = [...new Set(establishmentIds)];
+    const unique = [...new Set(establishmentIds)].sort();
     const orgEstablishments = await this.establishments.listByOrganization(organizationId);
     const validIds = new Set(orgEstablishments.map((e) => e.id));
     for (const id of unique) {

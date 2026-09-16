@@ -67,9 +67,16 @@ export function listProductsController(useCase: ListProductsUseCase) {
     const type = c.req.query('type');
     const categoryId = c.req.query('categoryId');
     const establishmentId = c.req.query('establishmentId');
-    const result = await useCase.execute({ organizationId, search, status, type, categoryId, establishmentId });
+    const page = parsePositiveInt(c.req.query('page'), 1);
+    const pageSize = parsePositiveInt(c.req.query('pageSize'), 50);
+    const result = await useCase.execute({ organizationId, search, status, type, categoryId, establishmentId, page, pageSize });
     return c.json(result, 200);
   };
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
 }
 
 export function getProductController(useCase: GetProductUseCase) {

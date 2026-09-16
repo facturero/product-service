@@ -15,7 +15,7 @@ export class InMemoryProductRepository implements ProductRepository {
     return this.items.find((p) => p.organizationId === organizationId && p.sku === sku) ?? null;
   }
 
-  async list(organizationId: string, filters: { search?: string; status?: string; type?: string; categoryId?: string; establishmentId?: string }): Promise<Product[]> {
+  async list(organizationId: string, filters: { search?: string; status?: string; type?: string; categoryId?: string; establishmentId?: string; limit?: number; offset?: number }): Promise<{ items: Product[]; total: number }> {
     let result = this.items.filter((p) => p.organizationId === organizationId);
     if (filters.status) result = result.filter((p) => p.status === filters.status);
     if (filters.type) result = result.filter((p) => p.type === filters.type);
@@ -32,7 +32,9 @@ export class InMemoryProductRepository implements ProductRepository {
       );
       result = result.filter((p) => ids.has(p.id));
     }
-    return result;
+    const offset = filters.offset ?? 0;
+    const limit = filters.limit ?? result.length;
+    return { items: result.slice(offset, offset + limit), total: result.length };
   }
 
   async save(product: Product): Promise<void> {
@@ -162,6 +164,17 @@ export class InMemoryProductImageRepository implements ProductImageRepository {
 
   async findPrimary(productId: string): Promise<ProductImage | null> {
     return this.items.find((i) => i.productId === productId && i.isPrimary) ?? null;
+  }
+
+  async findPrimariesByProductIds(productIds: string[]): Promise<Map<string, ProductImage>> {
+    const result = new Map<string, ProductImage>();
+    const set = new Set(productIds);
+    for (const img of this.items) {
+      if (img.isPrimary && set.has(img.productId) && !result.has(img.productId)) {
+        result.set(img.productId, img);
+      }
+    }
+    return result;
   }
 }
 
