@@ -98,7 +98,15 @@ ProductModel.init(
     created_at: DataTypes.DATE,
     updated_at: DataTypes.DATE,
   },
-  { sequelize, tableName: 'products', timestamps: false },
+  {
+    sequelize,
+    tableName: 'products',
+    timestamps: false,
+    // El listado filtra por organization_id y ordena por created_at DESC, id DESC.
+    // Sin este índice, MySQL hacía un filesort de TODAS las filas del org por
+    // petición (dos scans con el COUNT) → GET /products caía a ~17 RPS.
+    indexes: [{ name: 'products_org_created', fields: ['organization_id', 'created_at', 'id'] }],
+  },
 );
 
 export class ProductTaxModel extends Model<
