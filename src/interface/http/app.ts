@@ -1,20 +1,18 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { httpInstrumentationMiddleware } from '@hono/otel';
 import { AppDependencies, catalogRoutes, categoryRoutes, healthRoutes, productRoutes, unitRoutes } from './routes.js';
 import { contextMiddleware, errorHandler } from './middlewares.js';
 
 export function createApp(deps: AppDependencies): Hono {
   const app = new Hono();
 
-  if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
-    app.use('*', httpInstrumentationMiddleware({
-      serviceName: process.env.OTEL_SERVICE_NAME ?? 'product-service',
-      captureRequestHeaders: ['x-request-id'],
-      spanNameFactory: (c) => `HTTP ${c.req.method} ${c.req.path}`,
-    }));
-  }
+  // OJO: @hono/otel se eliminó del path de requests. Su rastreo de métricas por
+  // request (histogram.record + counter.add) bloqueaba TODAS las peticiones
+  // durante la exportación del PeriodExportingMetricReader al otel-collector
+  // (lock del SDK métricas + export lento) → /health pasaba de 19ms a 3.5s y el
+  // RPS colapsaba a ~10 bajo concurrencia. Los TRACES siguen cubiertos por
+  // HttpInstrumentation en infra/telemetry/otel.ts (otlptrace), que no tiene ese lock.
   app.use('*', logger());
   app.use('*', contextMiddleware());
   app.use(
