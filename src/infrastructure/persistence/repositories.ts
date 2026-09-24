@@ -1,5 +1,6 @@
 import { Op, Transaction } from 'sequelize';
 import { sequelize } from './sequelize.js';
+import { CountCache } from './count-cache.js';
 import {
   CategoryModel,
   OutboxModel,
@@ -113,6 +114,11 @@ function toProductEstablishment(m: ProductEstablishmentModel): ProductEstablishm
 
 // ── Repositories ────────────────────────────────────────────────────────────
 
+// Total del listado de productos: cacheado unos segundos (ver count-cache.ts). El
+// COUNT(*) de una organización con decenas de miles de productos cuesta ~90 ms de
+// MySQL por petición y limitaba GET /products a ~41 RPS. 0 desactiva el caché.
+const productCountCache = new CountCache(Number(process.env.PRODUCT_COUNT_CACHE_TTL_MS ?? 5000));
+
 function productRepository(tx?: Transaction): ProductRepository {
   return {
     async findById(id) {
@@ -154,11 +160,21 @@ function productRepository(tx?: Transaction): ProductRepository {
         limit: filters.limit,
         offset: filters.offset,
       });
-      const total = await ProductModel.count({ where, include, transaction: tx });
+      // Dentro de una transacción se cuenta siempre (debe ver sus propias escrituras).
+      const total = tx
+        ? await ProductModel.count({ where, include, transaction: tx })
+        : await productCountCache.get(
+            organizationId,
+            JSON.stringify([filters.status, filters.type, filters.categoryId, filters.search, filters.establishmentId]),
+            () => ProductModel.count({ where, include }),
+          );
       return { items: rows.map(toProduct), total };
     },
     async save(product) {
       const p = product.toPersistence();
+      // El total de esta organización cambia: se descarta lo cacheado (los demas
+      // procesos lo veran cuando venza el TTL).
+      productCountCache.invalidate(p.organizationId);
       await ProductModel.upsert(
         {
           id: p.id,
