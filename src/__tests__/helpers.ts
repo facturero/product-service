@@ -105,6 +105,11 @@ export class InMemoryProductTaxRepository implements ProductTaxRepository {
     return this.items.filter((t) => t.productId === productId);
   }
 
+  async findByProducts(productIds: string[]): Promise<ProductTax[]> {
+    const ids = new Set(productIds);
+    return this.items.filter((t) => ids.has(t.productId));
+  }
+
   async save(productTax: ProductTax): Promise<void> {
     this.items.push(productTax);
   }

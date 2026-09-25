@@ -294,6 +294,14 @@ function productTaxRepository(tx?: Transaction): ProductTaxRepository {
       });
       return rows.map(toProductTax);
     },
+    async findByProducts(productIds) {
+      if (productIds.length === 0) return [];
+      const rows = await ProductTaxModel.findAll({
+        where: { product_id: productIds },
+        transaction: tx,
+      });
+      return rows.map(toProductTax);
+    },
     async save(productTax) {
       const p = productTax.toPersistence();
       await ProductTaxModel.upsert(

@@ -174,8 +174,17 @@ export interface ListProductsInput {
   pageSize?: number;
 }
 
+/**
+ * Ítem del listado: el resumen más los impuestos asignados al producto (mismo formato
+ * que el detalle). El POS los necesita para calcular el IVA de cada línea sin pedir
+ * el detalle producto por producto.
+ */
+export interface ProductListItemDTO extends ProductSummaryDTO {
+  taxes: ProductTaxDTO[];
+}
+
 export interface ProductListDTO {
-  items: ProductSummaryDTO[];
+  items: ProductListItemDTO[];
   total: number;
   page: number;
   pageSize: number;

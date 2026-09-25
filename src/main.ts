@@ -42,7 +42,7 @@ async function main(): Promise<void> {
   const app = createApp({
     useCases: {
       createProduct: new CreateProductUseCase(uow, establishmentRepo),
-      listProducts: new ListProductsUseCase(repos.products, repos.productImages),
+      listProducts: new ListProductsUseCase(repos.products, repos.productImages, repos.productTaxes),
       getProduct: getProductUseCase,
       updateProduct: new UpdateProductUseCase(uow, establishmentRepo),
       disableProduct: new DisableProductUseCase(uow),

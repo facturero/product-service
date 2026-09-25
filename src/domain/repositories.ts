@@ -50,6 +50,8 @@ export interface UnitRepository {
 
 export interface ProductTaxRepository {
   findByProduct(productId: string): Promise<ProductTax[]>;
+  /** Impuestos de varios productos en UNA consulta (el listado los necesita por pagina). */
+  findByProducts(productIds: string[]): Promise<ProductTax[]>;
   save(productTax: ProductTax): Promise<void>;
   deleteByProduct(productId: string): Promise<void>;
 }

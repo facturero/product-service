@@ -1,6 +1,6 @@
-import { ProductRepository, ProductImageRepository } from '../../domain/repositories.js';
+import { ProductRepository, ProductImageRepository, ProductTaxRepository } from '../../domain/repositories.js';
 import { Money } from '../../domain/value-objects.js';
-import { ListProductsInput, ProductListDTO, ProductSummaryDTO } from '../dtos.js';
+import { ListProductsInput, ProductListDTO, ProductListItemDTO, ProductTaxDTO } from '../dtos.js';
 
 const MAX_PAGE_SIZE = 500;
 
@@ -8,6 +8,7 @@ export class ListProductsUseCase {
   constructor(
     private readonly productRepo: ProductRepository,
     private readonly imageRepo: ProductImageRepository,
+    private readonly taxRepo: ProductTaxRepository,
   ) {}
 
   async execute(input: ListProductsInput): Promise<ProductListDTO> {
@@ -33,7 +34,17 @@ export class ListProductsUseCase {
       ? await this.imageRepo.findPrimariesByProductIds(items.map((p) => p.id))
       : new Map();
 
-    const result: ProductSummaryDTO[] = items.map((p) => {
+    // Impuestos de todos los productos de la página en UNA query (no una por producto):
+    // el POS los necesita para calcular el IVA de cada línea, que es por producto.
+    const taxRows = items.length > 0 ? await this.taxRepo.findByProducts(items.map((p) => p.id)) : [];
+    const taxesByProduct = new Map<string, ProductTaxDTO[]>();
+    for (const t of taxRows) {
+      const list = taxesByProduct.get(t.productId) ?? [];
+      list.push({ id: t.id, taxRateId: t.taxRateId, kind: t.kind });
+      taxesByProduct.set(t.productId, list);
+    }
+
+    const result: ProductListItemDTO[] = items.map((p) => {
       const money = Money.fromCents(p.priceCents, p.currencyCode);
       const primary = primaries.get(p.id);
       return {
@@ -50,6 +61,7 @@ export class ListProductsUseCase {
         currencyCode: p.currencyCode,
         priceIncludesTax: p.priceIncludesTax,
         imageFileId: primary?.fileId ?? null,
+        taxes: taxesByProduct.get(p.id) ?? [],
       };
     });
 
