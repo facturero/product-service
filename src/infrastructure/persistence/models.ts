@@ -205,22 +205,6 @@ OutboxModel.init(
   { sequelize, tableName: 'outbox_messages', timestamps: false },
 );
 
-export class ProcessedEventModel extends Model<
-  InferAttributes<ProcessedEventModel>,
-  InferCreationAttributes<ProcessedEventModel>
-> {
-  declare event_id: string;
-  declare processed_at: Date;
-}
-
-ProcessedEventModel.init(
-  {
-    event_id: { type: DataTypes.CHAR(36), primaryKey: true },
-    processed_at: { type: DataTypes.DATE, allowNull: false },
-  },
-  { sequelize, tableName: 'processed_events', timestamps: false },
-);
-
 // Asociaciones
 ProductModel.belongsTo(CategoryModel, { foreignKey: 'category_id', as: 'category' });
 CategoryModel.hasMany(ProductModel, { foreignKey: 'category_id', as: 'products' });
