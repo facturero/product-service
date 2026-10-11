@@ -73,3 +73,14 @@ describe('toda acción que escribe deja huella en la bitácora', () => {
     expect(sobran, 'exenciones que ya no hacen falta: ' + sobran.join(', ')).toEqual([]);
   });
 });
+
+describe('el evento y el cambio van en la misma transacción', () => {
+  it('ningún caso de uso publica al outbox con repositorios sueltos: lo hace dentro de `uow.execute`', () => {
+    // `this.repos.outbox.add(...)` fuera de la unidad de trabajo se ejecuta en otra transacción que el cambio: un fallo entre
+    // ambos pierde el evento, y el relé no se entera hasta su siguiente barrido (nos pasó con categorías y unidades).
+    const sueltos = fuentes('application')
+      .filter((f) => /\bthis\.\w+\.outbox\.add\(/.test(leerCodigo(f)))
+      .map(nombre);
+    expect(sueltos, 'publican fuera de la unidad de trabajo: ' + sueltos.join(', ')).toEqual([]);
+  });
+});
