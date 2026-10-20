@@ -37,6 +37,9 @@ export function createProductController(useCase: CreateProductUseCase) {
       establishmentIds: string[];
       taxRateIds?: string[];
       priceIncludesTax?: boolean;
+      trackStock?: boolean;
+      allowNegativeStock?: boolean;
+      valuationMethod?: 'weighted_average' | 'fifo';
       metadata?: Record<string, unknown>;
     };
     const result = await useCase.execute({
@@ -53,6 +56,11 @@ export function createProductController(useCase: CreateProductUseCase) {
       establishmentIds: body.establishmentIds,
       taxRateIds: body.taxRateIds,
       priceIncludesTax: body.priceIncludesTax,
+      // El validador y el caso de uso ya los soportaban, pero aquí se descartaban: TODO producto quedaba sin control de stock
+      // y inventario nunca registraba nada (ni por API ni por pantalla se podía activar).
+      trackStock: body.trackStock,
+      allowNegativeStock: body.allowNegativeStock,
+      valuationMethod: body.valuationMethod,
       metadata: body.metadata,
     });
     return c.json(result, 201);
@@ -104,6 +112,9 @@ export function updateProductController(useCase: UpdateProductUseCase) {
       price?: string;
       currencyCode?: string;
       priceIncludesTax?: boolean;
+      trackStock?: boolean;
+      allowNegativeStock?: boolean;
+      valuationMethod?: 'weighted_average' | 'fifo';
       status?: 'active' | 'inactive';
       metadata?: Record<string, unknown> | null;
     };
@@ -121,6 +132,9 @@ export function updateProductController(useCase: UpdateProductUseCase) {
       price: body.price,
       currencyCode: body.currencyCode,
       priceIncludesTax: body.priceIncludesTax,
+      trackStock: body.trackStock,
+      allowNegativeStock: body.allowNegativeStock,
+      valuationMethod: body.valuationMethod,
       status: body.status,
       metadata: body.metadata,
     });
