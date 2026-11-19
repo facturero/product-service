@@ -9,15 +9,15 @@ export const createProductSchema = z.object({
   currencyCode: z.string().length(3, 'El código de moneda debe tener 3 caracteres.'),
   sku: z.string().max(64).optional(),
   description: z.string().optional(),
-  categoryId: z.string().uuid().optional(),
-  unitId: z.string().uuid().optional(),
-  establishmentIds: z.array(z.string().uuid()).min(1, 'Debe asignar al menos un establecimiento.'),
-  taxRateIds: z.array(z.string().uuid()).optional(),
+  categoryId: z.string().guid().optional(),
+  unitId: z.string().guid().optional(),
+  establishmentIds: z.array(z.string().guid()).min(1, 'Debe asignar al menos un establecimiento.'),
+  taxRateIds: z.array(z.string().guid()).optional(),
   priceIncludesTax: z.boolean().default(false),
   trackStock: z.boolean().default(false),
   allowNegativeStock: z.boolean().default(false),
   valuationMethod: z.enum(['weighted_average', 'fifo']).default('weighted_average'),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const updateProductSchema = z.object({
@@ -25,9 +25,9 @@ export const updateProductSchema = z.object({
   sku: z.string().max(64).optional().nullable(),
   description: z.string().optional().nullable(),
   type: z.enum(['good', 'service']).optional(),
-  categoryId: z.string().uuid().optional().nullable(),
-  unitId: z.string().uuid().optional().nullable(),
-  establishmentIds: z.array(z.string().uuid()).min(1, 'Debe asignar al menos un establecimiento.').optional(),
+  categoryId: z.string().guid().optional().nullable(),
+  unitId: z.string().guid().optional().nullable(),
+  establishmentIds: z.array(z.string().guid()).min(1, 'Debe asignar al menos un establecimiento.').optional(),
   price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'El precio debe ser un número válido con hasta 2 decimales.').optional(),
   currencyCode: z.string().length(3).optional(),
   priceIncludesTax: z.boolean().optional(),
@@ -35,17 +35,17 @@ export const updateProductSchema = z.object({
   allowNegativeStock: z.boolean().optional(),
   valuationMethod: z.enum(['weighted_average', 'fifo']).optional(),
   status: z.enum(['active', 'inactive']).optional(),
-  metadata: z.record(z.unknown()).optional().nullable(),
+  metadata: z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
 export const updateTaxesSchema = z.object({
-  taxRateIds: z.array(z.string().uuid()),
+  taxRateIds: z.array(z.string().guid()),
 });
 
 export const createCategorySchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio.').max(255),
   description: z.string().max(255).optional(),
-  parentId: z.string().uuid().optional(),
+  parentId: z.string().guid().optional(),
 });
 
 export const updateCategorySchema = z.object({
@@ -64,7 +64,7 @@ export const updateUnitSchema = z.object({
 });
 
 export const addImageSchema = z.object({
-  fileId: z.string().uuid('El fileId no es válido.'),
+  fileId: z.string().guid('El fileId no es válido.'),
   alt: z.string().max(255).optional(),
   // Sin valor por defecto a propósito: AddProductImageUseCase decide isPrimary
   // (primera imagen del producto) y position (siguiente por orden) cuando el
